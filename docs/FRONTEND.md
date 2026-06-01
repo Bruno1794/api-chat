@@ -5,13 +5,13 @@ Este documento descreve como implementar o frontend Next.js para a API de chat.
 Base URL local:
 
 ```txt
-http://localhost:3001
+https://apichat.sytes.net
 ```
 
 Socket.IO URL:
 
 ```txt
-http://localhost:3001
+https://apichat.sytes.net
 ```
 
 ## Autenticacao
@@ -751,7 +751,7 @@ npm install socket.io-client
 ```ts
 import { io } from 'socket.io-client';
 
-export const socket = io('http://localhost:3001', {
+export const socket = io('https://apichat.sytes.net', {
   auth: {
     token: accessToken
   }
@@ -763,7 +763,7 @@ export const socket = io('http://localhost:3001', {
 ```ts
 import { io } from 'socket.io-client';
 
-export const socket = io('http://localhost:3001');
+export const socket = io('https://apichat.sytes.net');
 ```
 
 ### Entrar na conversa
@@ -911,7 +911,7 @@ try {
 import axios from 'axios';
 
 export const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+  baseURL: process.env.NEXT_PUBLIC_API_URL || 'https://apichat.sytes.net'
 });
 
 api.interceptors.request.use(config => {
@@ -928,6 +928,6 @@ api.interceptors.request.use(config => {
 Variavel no Next.js:
 
 ```env
-NEXT_PUBLIC_API_URL=http://localhost:3001
-NEXT_PUBLIC_SOCKET_URL=http://localhost:3001
+NEXT_PUBLIC_API_URL=https://apichat.sytes.net
+NEXT_PUBLIC_SOCKET_URL=https://apichat.sytes.net
 ```

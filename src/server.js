@@ -26,8 +26,7 @@ async function startServer() {
 
     httpServer.listen(port, host, () => {
       console.log(`Servidor rodando em ${host}:${port}`);
-      console.log(`Health check: http://localhost:${port}/health`);
-      console.log(`Health check na rede: http://192.168.0.131:${port}/health`);
+      console.log(`Health check: ${process.env.APP_URL || `http://localhost:${port}`}/health`);
     });
   } catch (error) {
     console.error('Erro ao iniciar servidor:', error);

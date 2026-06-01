@@ -3,6 +3,7 @@ const socket = require('../utils/socket');
 const ConversationService = require('./ConversationService');
 const { Conversation, Message, Attachment, MessageReaction } = require('../models');
 const ClienteService = require('./ClienteService');
+const PushService = require('./PushService');
 
 const messageIncludes = [
   {
@@ -96,6 +97,8 @@ class MessageService {
     socket.emitToAll('conversation_updated', {
       conversation_id: data.conversation_id
     });
+
+    void PushService.notifyClientMessage(payload, conversation).catch(() => undefined);
 
     return payload;
   }
@@ -337,6 +340,3 @@ class MessageService {
 }
 
 module.exports = new MessageService();
-
-
-

@@ -1,6 +1,8 @@
 # API Chat de Suporte
 
-Base URL local: `http://localhost:3001`
+Base URL producao: `https://apichat.sytes.net`
+
+Base URL local: `http://localhost:9191`
 
 Use `Authorization: Bearer <accessToken>` nas rotas protegidas. As rotas `POST /conversations` e `POST /messages` aceitam cliente sem JWT para uso no widget/site.
 
@@ -269,7 +271,7 @@ Retorna o arquivo.
 Conectar com JWT opcional:
 
 ```js
-io("http://localhost:3001", {
+io("https://apichat.sytes.net", {
   auth: {
     token: accessToken
   }

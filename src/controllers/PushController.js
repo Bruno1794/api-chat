@@ -1,0 +1,22 @@
+const asyncHandler = require('../middlewares/asyncHandler');
+const PushService = require('../services/PushService');
+
+class PushController {
+  config = asyncHandler(async (req, res) => {
+    return res.json(PushService.getPublicConfig());
+  });
+
+  subscribe = asyncHandler(async (req, res) => {
+    const result = await PushService.subscribe(req.body, req.headers['user-agent'] || null);
+
+    return res.status(201).json(result);
+  });
+
+  unsubscribe = asyncHandler(async (req, res) => {
+    const result = await PushService.unsubscribe(req.body);
+
+    return res.json(result);
+  });
+}
+
+module.exports = new PushController();
