@@ -1,4 +1,35 @@
 const conversationPresence = new Map();
+const CLIENT_PRESENCE_TTL_MS = 15000;
+const ATTENDANT_PRESENCE_TTL_MS = 60000;
+
+function isPresenceExpired(item, now = Date.now()) {
+  const lastSeen = new Date(item.last_seen_at || item.joined_at).getTime();
+  const ttl =
+    item.participant_type === 'CLIENTE' ? CLIENT_PRESENCE_TTL_MS : ATTENDANT_PRESENCE_TTL_MS;
+
+  return Number.isFinite(lastSeen) && now - lastSeen > ttl;
+}
+
+function prunePresence(conversationId) {
+  const normalizedId = String(conversationId);
+  const roomPresence = conversationPresence.get(normalizedId);
+
+  if (!roomPresence) {
+    return;
+  }
+
+  const now = Date.now();
+
+  roomPresence.forEach((item, socketId) => {
+    if (isPresenceExpired(item, now)) {
+      roomPresence.delete(socketId);
+    }
+  });
+
+  if (roomPresence.size === 0) {
+    conversationPresence.delete(normalizedId);
+  }
+}
 
 function getConversationId(payload) {
   if (payload && typeof payload === 'object') {
@@ -9,6 +40,7 @@ function getConversationId(payload) {
 }
 
 function getPresencePayload(conversationId) {
+  prunePresence(conversationId);
   const roomPresence = conversationPresence.get(String(conversationId)) || new Map();
   const participants = Array.from(roomPresence.values());
 
@@ -50,13 +82,34 @@ function joinConversationPresence(io, socket, payload) {
     socket_id: socket.id,
     participant_type: participantType,
     actor_id: actorId ? String(actorId) : null,
-    joined_at: new Date().toISOString()
+    joined_at: new Date().toISOString(),
+    last_seen_at: new Date().toISOString()
   });
 
   socket.presenceConversations = socket.presenceConversations || new Set();
   socket.presenceConversations.add(normalizedId);
 
   emitPresence(io, normalizedId);
+}
+
+function touchConversationPresence(io, socket, payload) {
+  const conversationId = getConversationId(payload);
+
+  if (!conversationId) {
+    return;
+  }
+
+  const normalizedId = String(conversationId);
+  const roomPresence = conversationPresence.get(normalizedId);
+  const currentPresence = roomPresence?.get(socket.id);
+
+  if (!currentPresence) {
+    joinConversationPresence(io, socket, payload);
+    return;
+  }
+
+  currentPresence.last_seen_at = new Date().toISOString();
+  roomPresence.set(socket.id, currentPresence);
 }
 
 function leaveConversationPresence(io, socket, payload) {
@@ -112,5 +165,6 @@ module.exports = {
   hasClientInConversation,
   joinConversationPresence,
   leaveConversationPresence,
-  leaveAllPresence
+  leaveAllPresence,
+  touchConversationPresence
 };

@@ -3,7 +3,8 @@ const { User } = require('../models');
 const {
   joinConversationPresence,
   leaveConversationPresence,
-  leaveAllPresence
+  leaveAllPresence,
+  touchConversationPresence
 } = require('../utils/conversationPresence');
 
 async function resolveUser(socket) {
@@ -56,6 +57,10 @@ function initSockets(io) {
 
     socket.on('leave_conversation', payload => {
       leaveConversationPresence(io, socket, payload);
+    });
+
+    socket.on('conversation_presence_ping', payload => {
+      touchConversationPresence(io, socket, payload);
     });
 
     socket.on('typing', payload => {
