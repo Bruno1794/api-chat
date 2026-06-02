@@ -226,6 +226,10 @@ class PushService {
     });
 
     if (subscriptions.length === 0) {
+      console.log('PushAlert sem assinaturas para conversa', {
+        conversation_id: conversation.id,
+        cliente_id_externo: conversation.cliente_id_externo
+      });
       return;
     }
 
@@ -233,6 +237,11 @@ class PushService {
 
     await Promise.allSettled(
       subscriptions.map(async record => {
+        console.log('PushAlert enviando', {
+          conversation_id: conversation.id,
+          subscriber_id: record.subscriber_id
+        });
+
         const form = new URLSearchParams({
           title: data.title,
           message: data.body,
@@ -269,23 +278,31 @@ class PushService {
               body: output,
               subscriber_id: record.subscriber_id
             });
+            return;
           }
         } catch {
           // PushAlert may return a plain notification id on success.
         }
+
+        console.log('PushAlert envio solicitado', {
+          status: response.status,
+          body: responseText,
+          subscriber_id: record.subscriber_id
+        });
       })
     );
   }
 
   async notifyClientMessage(message, conversation) {
-    if (message.sender_type !== 'ATENDENTE' || hasClientInConversation(conversation.id)) {
+    if (message.sender_type !== 'ATENDENTE') {
       return;
     }
 
     const data = this.buildNotificationData(message, conversation);
+    const clientIsPresent = hasClientInConversation(conversation.id);
 
     await Promise.allSettled([
-      this.notifyWebPush(data, conversation),
+      clientIsPresent ? Promise.resolve() : this.notifyWebPush(data, conversation),
       this.notifyPushAlert(data, conversation)
     ]);
   }
