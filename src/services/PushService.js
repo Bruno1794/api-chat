@@ -155,14 +155,15 @@ class PushService {
     );
     const frontendUrl = (process.env.FRONTEND_URL || '').replace(/\/$/, '');
     const url = frontendUrl ? `${frontendUrl}/chat` : '/chat';
+    const iconUrl = frontendUrl ? `${frontendUrl}/icons/icon-192.png` : undefined;
 
     return {
       title: 'Nova mensagem no suporte',
       body,
       url,
       conversation_id: conversation.id,
-      icon: '/icons/icon-192.png',
-      badge: '/icons/icon-192.png'
+      icon: iconUrl,
+      badge: iconUrl
     };
   }
 
@@ -240,7 +241,7 @@ class PushService {
           subscriber: record.subscriber_id
         });
 
-        await fetch(sendUrl, {
+        const response = await fetch(sendUrl, {
           method: 'POST',
           headers: {
             Authorization: `api_key=${apiKey}`,
@@ -248,6 +249,30 @@ class PushService {
           },
           body: form.toString()
         });
+
+        const responseText = await response.text();
+
+        if (!response.ok) {
+          console.error('PushAlert envio falhou', {
+            status: response.status,
+            body: responseText,
+            subscriber_id: record.subscriber_id
+          });
+          return;
+        }
+
+        try {
+          const output = JSON.parse(responseText);
+
+          if (output && output.success === false) {
+            console.error('PushAlert envio recusado', {
+              body: output,
+              subscriber_id: record.subscriber_id
+            });
+          }
+        } catch {
+          // PushAlert may return a plain notification id on success.
+        }
       })
     );
   }
