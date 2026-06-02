@@ -7,6 +7,7 @@ const { hasClientInConversation } = require('../utils/conversationPresence');
 const { Conversation, PushAlertSubscription, PushSubscription } = require('../models');
 
 const PUSHALERT_DEFAULT_SEND_URL = 'https://api.pushalert.co/rest/v1/send';
+const NOTIFICATION_PREVIEW_LIMIT = 120;
 
 class PushService {
   constructor() {
@@ -148,19 +149,27 @@ class PushService {
   }
 
   buildNotificationData(message, conversation) {
-    const body = message.message || (
+    const textPreview = String(message.message || '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    const attachmentPreview =
       message.message_type === 'IMAGE'
-        ? 'Imagem recebida'
+        ? 'Enviou uma imagem'
         : message.message_type === 'AUDIO'
-          ? 'Audio recebido'
-          : 'Arquivo recebido'
-    );
+          ? 'Enviou um audio'
+          : message.message_type === 'FILE'
+            ? 'Enviou um arquivo'
+            : 'Enviou uma mensagem';
+    const body =
+      textPreview.length > NOTIFICATION_PREVIEW_LIMIT
+        ? `${textPreview.slice(0, NOTIFICATION_PREVIEW_LIMIT - 1)}...`
+        : textPreview || attachmentPreview;
     const frontendUrl = (process.env.FRONTEND_URL || '').replace(/\/$/, '');
     const url = frontendUrl ? `${frontendUrl}/chat` : '/chat';
     const iconUrl = frontendUrl ? `${frontendUrl}/icons/icon-192.png` : undefined;
 
     return {
-      title: 'Nova mensagem no suporte',
+      title: 'Nova resposta do suporte',
       body,
       url,
       conversation_id: conversation.id,
