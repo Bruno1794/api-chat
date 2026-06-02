@@ -9,6 +9,7 @@ router.get('/config', PushController.config);
 router.post('/subscribe', PushController.subscribe);
 router.post('/admin/subscribe', authMiddleware, PushController.subscribeAdmin);
 router.post('/pushalert/subscribe', PushController.subscribePushAlert);
+router.post('/admin/pushalert/subscribe', authMiddleware, PushController.subscribeAdminPushAlert);
 router.delete('/subscribe', PushController.unsubscribe);
 
 module.exports = router;

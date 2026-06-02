@@ -6,7 +6,12 @@ class PushAlertSubscription extends Model {
       {
         cliente_id_externo: {
           type: DataTypes.STRING,
-          allowNull: false
+          allowNull: true
+        },
+
+        user_id: {
+          type: DataTypes.INTEGER,
+          allowNull: true
         },
 
         conversation_id: {
@@ -42,6 +47,11 @@ class PushAlertSubscription extends Model {
     PushAlertSubscription.belongsTo(models.Conversation, {
       foreignKey: 'conversation_id',
       as: 'conversation'
+    });
+
+    PushAlertSubscription.belongsTo(models.User, {
+      foreignKey: 'user_id',
+      as: 'user'
     });
   }
 }

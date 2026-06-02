@@ -177,6 +177,42 @@ class PushService {
     };
   }
 
+  async subscribeAdminPushAlert(data, user, userAgent = null) {
+    if (!user) {
+      throw new ApiError('JWT obrigatorio para assinar PushAlert do painel', 401);
+    }
+
+    const subscriberId = String(data.subscriber_id || data.subscriberId || '').trim();
+
+    if (!subscriberId) {
+      throw new ApiError('subscriber_id e obrigatorio', 422);
+    }
+
+    const [record] = await PushAlertSubscription.findOrCreate({
+      where: {
+        subscriber_id: subscriberId
+      },
+      defaults: {
+        cliente_id_externo: null,
+        user_id: user.id,
+        conversation_id: null,
+        subscriber_id: subscriberId,
+        user_agent: userAgent
+      }
+    });
+
+    if (!record.isNewRecord) {
+      await record.update({
+        user_id: user.id,
+        user_agent: userAgent
+      });
+    }
+
+    return {
+      success: true
+    };
+  }
+
   async unsubscribe(data) {
     const endpoint = data.endpoint || data.subscription?.endpoint;
 
@@ -452,14 +488,6 @@ class PushService {
       return;
     }
 
-    if (!this.enabled) {
-      this.configure();
-    }
-
-    if (!this.enabled) {
-      return;
-    }
-
     const where = conversation.atendente_id
       ? {
           [Op.or]: [{ id: conversation.atendente_id }, { role: 'ADMIN' }]
@@ -480,7 +508,89 @@ class PushService {
       return;
     }
 
-    const subscriptions = await PushSubscription.findAll({
+    const data = await this.buildAdminNotificationData(message, conversation);
+    const payload = JSON.stringify(data);
+    const tasks = [this.notifyAdminPushAlert(data, targetUserIds, conversation)];
+
+    if (!this.enabled) {
+      this.configure();
+    }
+
+    if (this.enabled) {
+      const subscriptions = await PushSubscription.findAll({
+        where: {
+          user_id: {
+            [Op.in]: targetUserIds
+          }
+        }
+      });
+
+      if (subscriptions.length === 0) {
+        console.log('Push admin sem assinaturas WebPush', {
+          conversation_id: conversation.id,
+          target_user_ids: targetUserIds
+        });
+      } else {
+        tasks.push(
+          Promise.allSettled(
+            subscriptions.map(async record => {
+              try {
+                console.log('Push admin enviando WebPush', {
+                  conversation_id: conversation.id,
+                  user_id: record.user_id,
+                  endpoint: String(record.endpoint || '').slice(0, 48)
+                });
+
+                await webPush.sendNotification(
+                  {
+                    endpoint: record.endpoint,
+                    keys: {
+                      p256dh: record.p256dh,
+                      auth: record.auth
+                    }
+                  },
+                  payload
+                );
+
+                console.log('Push admin WebPush enviado', {
+                  conversation_id: conversation.id,
+                  user_id: record.user_id
+                });
+              } catch (error) {
+                console.error('Push admin WebPush falhou', {
+                  conversation_id: conversation.id,
+                  user_id: record.user_id,
+                  statusCode: error.statusCode,
+                  body: error.body,
+                  message: error.message
+                });
+
+                if ([404, 410].includes(error.statusCode)) {
+                  await record.destroy();
+                }
+              }
+            })
+          )
+        );
+      }
+    } else {
+      console.log('Push admin WebPush desativado, tentando PushAlert', {
+        conversation_id: conversation.id,
+        target_user_ids: targetUserIds
+      });
+    }
+
+    await Promise.allSettled(tasks);
+  }
+
+  async notifyAdminPushAlert(data, targetUserIds, conversation) {
+    const apiKey = (process.env.PUSHALERT_REST_API_KEY || '').trim();
+
+    if (!apiKey || targetUserIds.length === 0) {
+      return;
+    }
+
+    const subscriptions = await PushAlertSubscription.findAll({
       where: {
         user_id: {
           [Op.in]: targetUserIds
@@ -489,52 +599,52 @@ class PushService {
     });
 
     if (subscriptions.length === 0) {
-      console.log('Push admin sem assinaturas', {
+      console.log('PushAlert admin sem assinaturas', {
         conversation_id: conversation.id,
         target_user_ids: targetUserIds
       });
       return;
     }
 
-    const payload = JSON.stringify(await this.buildAdminNotificationData(message, conversation));
+    const sendUrl = (process.env.PUSHALERT_SEND_URL || PUSHALERT_DEFAULT_SEND_URL).trim();
 
     await Promise.allSettled(
       subscriptions.map(async record => {
-        try {
-          console.log('Push admin enviando', {
-            conversation_id: conversation.id,
-            user_id: record.user_id,
-            endpoint: String(record.endpoint || '').slice(0, 48)
-          });
+        const form = new URLSearchParams({
+          title: data.title,
+          message: data.body,
+          url: data.url,
+          icon: data.icon,
+          subscriber: record.subscriber_id
+        });
 
-          await webPush.sendNotification(
-            {
-              endpoint: record.endpoint,
-              keys: {
-                p256dh: record.p256dh,
-                auth: record.auth
-              }
-            },
-            payload
-          );
+        const response = await fetch(sendUrl, {
+          method: 'POST',
+          headers: {
+            Authorization: `api_key=${apiKey}`,
+            'Content-Type': 'application/x-www-form-urlencoded'
+          },
+          body: form.toString()
+        });
 
-          console.log('Push admin enviado', {
-            conversation_id: conversation.id,
-            user_id: record.user_id
-          });
-        } catch (error) {
-          console.error('Push admin falhou', {
-            conversation_id: conversation.id,
-            user_id: record.user_id,
-            statusCode: error.statusCode,
-            body: error.body,
-            message: error.message
-          });
+        const responseText = await response.text();
 
-          if ([404, 410].includes(error.statusCode)) {
-            await record.destroy();
-          }
+        if (!response.ok) {
+          console.error('PushAlert admin falhou', {
+            sendUrl,
+            status: response.status,
+            body: responseText,
+            subscriber_id: record.subscriber_id
+          });
+          return;
         }
+
+        console.log('PushAlert admin solicitado', {
+          sendUrl,
+          status: response.status,
+          body: responseText,
+          subscriber_id: record.subscriber_id
+        });
       })
     );
   }

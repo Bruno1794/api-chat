@@ -28,6 +28,16 @@ class PushController {
     return res.status(201).json(result);
   });
 
+  subscribeAdminPushAlert = asyncHandler(async (req, res) => {
+    const result = await PushService.subscribeAdminPushAlert(
+      req.body,
+      req.user,
+      req.headers['user-agent'] || null
+    );
+
+    return res.status(201).json(result);
+  });
+
   unsubscribe = asyncHandler(async (req, res) => {
     const result = await PushService.unsubscribe(req.body);
 
