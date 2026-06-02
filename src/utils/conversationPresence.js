@@ -110,6 +110,7 @@ function touchConversationPresence(io, socket, payload) {
 
   currentPresence.last_seen_at = new Date().toISOString();
   roomPresence.set(socket.id, currentPresence);
+  emitPresence(io, normalizedId);
 }
 
 function leaveConversationPresence(io, socket, payload) {
