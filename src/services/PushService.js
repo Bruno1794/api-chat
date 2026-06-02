@@ -4,7 +4,6 @@ const { Op } = require('sequelize');
 const ApiError = require('../utils/ApiError');
 const ClienteService = require('./ClienteService');
 const {
-  hasAttendantInConversation,
   hasClientInConversation
 } = require('../utils/conversationPresence');
 const {
@@ -455,11 +454,9 @@ class PushService {
           role: {
             [Op.in]: ['ADMIN', 'ATENDENTE']
           }
-        };
+    };
     const users = await User.findAll({ where });
-    const targetUserIds = users
-      .map(user => user.id)
-      .filter(userId => !hasAttendantInConversation(conversation.id, userId));
+    const targetUserIds = users.map(user => user.id);
 
     if (targetUserIds.length === 0) {
       return;

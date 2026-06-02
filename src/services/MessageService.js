@@ -176,15 +176,21 @@ class MessageService {
       throw new ApiError('JWT obrigatorio para marcar esta mensagem como lida', 401);
     }
 
+    const readAt = new Date().toISOString();
+
     await message.update({
       read: true
     });
 
-    socket.emitToConversation(message.conversation_id, 'message_read', {
+    const receipt = {
       message_id: message.id,
       conversation_id: message.conversation_id,
-      read: true
-    });
+      read: true,
+      read_at: readAt
+    };
+
+    socket.emitToConversation(message.conversation_id, 'message_read', receipt);
+    socket.emitToAll('message_read', receipt);
     socket.emitToAll('conversation_updated', {
       conversation_id: message.conversation_id
     });
