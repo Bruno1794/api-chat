@@ -178,6 +178,28 @@ class PushService {
     };
   }
 
+  buildBroadcastNotificationData(notice, conversation) {
+    const textPreview = String(notice.message || '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    const body =
+      textPreview.length > NOTIFICATION_PREVIEW_LIMIT
+        ? `${textPreview.slice(0, NOTIFICATION_PREVIEW_LIMIT - 1)}...`
+        : textPreview || 'Voce recebeu um aviso do suporte.';
+    const frontendUrl = (process.env.FRONTEND_URL || '').replace(/\/$/, '');
+    const url = frontendUrl ? `${frontendUrl}/chat` : '/chat';
+    const iconUrl = frontendUrl ? `${frontendUrl}/icons/icon-192.png` : undefined;
+
+    return {
+      title: notice.title || 'Aviso do suporte',
+      body,
+      url,
+      conversation_id: conversation.id,
+      icon: iconUrl,
+      badge: iconUrl
+    };
+  }
+
   async notifyWebPush(data, conversation) {
     if (!this.enabled) {
       this.configure();
@@ -318,6 +340,15 @@ class PushService {
     if (clientIsPresent) {
       return;
     }
+
+    await Promise.allSettled([
+      this.notifyWebPush(data, conversation),
+      this.notifyPushAlert(data, conversation)
+    ]);
+  }
+
+  async notifyBroadcastNotice(notice, conversation) {
+    const data = this.buildBroadcastNotificationData(notice, conversation);
 
     await Promise.allSettled([
       this.notifyWebPush(data, conversation),

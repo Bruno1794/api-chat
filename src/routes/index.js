@@ -10,6 +10,7 @@ const noteRoutes = require('./notes.routes');
 const uploadRoutes = require('./upload.routes');
 const shortcutRoutes = require('./shortcuts.routes');
 const pushRoutes = require('./push.routes');
+const broadcastRoutes = require('./broadcasts.routes');
 
 const router = Router();
 
@@ -22,6 +23,7 @@ router.use('/messages', messageRoutes);
 router.use('/notes', noteRoutes);
 router.use('/shortcuts', shortcutRoutes);
 router.use('/push', pushRoutes);
+router.use('/broadcasts', broadcastRoutes);
 router.use(uploadRoutes);
 
 module.exports = router;
