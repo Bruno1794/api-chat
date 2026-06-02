@@ -473,6 +473,10 @@ class PushService {
     const targetUserIds = users.map(user => user.id);
 
     if (targetUserIds.length === 0) {
+      console.log('Push admin sem usuarios para notificar', {
+        conversation_id: conversation.id,
+        atendente_id: conversation.atendente_id
+      });
       return;
     }
 
@@ -485,6 +489,10 @@ class PushService {
     });
 
     if (subscriptions.length === 0) {
+      console.log('Push admin sem assinaturas', {
+        conversation_id: conversation.id,
+        target_user_ids: targetUserIds
+      });
       return;
     }
 
@@ -493,6 +501,12 @@ class PushService {
     await Promise.allSettled(
       subscriptions.map(async record => {
         try {
+          console.log('Push admin enviando', {
+            conversation_id: conversation.id,
+            user_id: record.user_id,
+            endpoint: String(record.endpoint || '').slice(0, 48)
+          });
+
           await webPush.sendNotification(
             {
               endpoint: record.endpoint,
@@ -503,7 +517,20 @@ class PushService {
             },
             payload
           );
+
+          console.log('Push admin enviado', {
+            conversation_id: conversation.id,
+            user_id: record.user_id
+          });
         } catch (error) {
+          console.error('Push admin falhou', {
+            conversation_id: conversation.id,
+            user_id: record.user_id,
+            statusCode: error.statusCode,
+            body: error.body,
+            message: error.message
+          });
+
           if ([404, 410].includes(error.statusCode)) {
             await record.destroy();
           }
