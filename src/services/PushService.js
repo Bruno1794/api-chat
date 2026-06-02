@@ -306,8 +306,12 @@ class PushService {
     const data = this.buildNotificationData(message, conversation);
     const clientIsPresent = hasClientInConversation(conversation.id);
 
+    if (clientIsPresent) {
+      return;
+    }
+
     await Promise.allSettled([
-      clientIsPresent ? Promise.resolve() : this.notifyWebPush(data, conversation),
+      this.notifyWebPush(data, conversation),
       this.notifyPushAlert(data, conversation)
     ]);
   }
