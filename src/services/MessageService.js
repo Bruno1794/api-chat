@@ -184,6 +184,9 @@ class MessageService {
       conversation_id: message.conversation_id,
       read: true
     });
+    socket.emitToAll('conversation_updated', {
+      conversation_id: message.conversation_id
+    });
 
     return message;
   }
