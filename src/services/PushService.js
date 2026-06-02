@@ -225,7 +225,7 @@ class PushService {
     };
   }
 
-  buildAdminNotificationData(message, conversation) {
+  async buildAdminNotificationData(message, conversation) {
     const textPreview = String(message.message || '')
       .replace(/\s+/g, ' ')
       .trim();
@@ -244,9 +244,23 @@ class PushService {
     const frontendUrl = (process.env.FRONTEND_URL || '').replace(/\/$/, '');
     const url = frontendUrl ? `${frontendUrl}/dashboard?tab=chats` : '/dashboard?tab=chats';
     const iconUrl = frontendUrl ? `${frontendUrl}/icons/icon-192.png` : undefined;
+    let cliente = null;
+
+    try {
+      cliente = await ClienteService.findById(conversation.cliente_id_externo);
+    } catch {
+      cliente = null;
+    }
+
+    const clienteLabel =
+      cliente?.referencia ||
+      cliente?.usuario_referencia ||
+      cliente?.nome ||
+      conversation.cliente_id_externo ||
+      'Cliente';
 
     return {
-      title: 'Nova mensagem de cliente',
+      title: `${clienteLabel} mandou mensagem`,
       body,
       url,
       conversation_id: conversation.id,
@@ -474,7 +488,7 @@ class PushService {
       return;
     }
 
-    const payload = JSON.stringify(this.buildAdminNotificationData(message, conversation));
+    const payload = JSON.stringify(await this.buildAdminNotificationData(message, conversation));
 
     await Promise.allSettled(
       subscriptions.map(async record => {
