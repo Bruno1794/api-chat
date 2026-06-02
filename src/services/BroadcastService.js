@@ -1,5 +1,3 @@
-const { Op } = require('sequelize');
-
 const PushService = require('./PushService');
 const { Conversation } = require('../models');
 const ApiError = require('../utils/ApiError');
@@ -7,7 +5,6 @@ const socket = require('../utils/socket');
 const { hasClientInConversation } = require('../utils/conversationPresence');
 
 const NOTICE_LIMIT = 600;
-const ACTIVE_STATUSES = ['ABERTA', 'AGUARDANDO_CLIENTE'];
 
 class BroadcastService {
   async sendNotice(data, user) {
@@ -22,13 +19,7 @@ class BroadcastService {
       throw new ApiError(`Mensagem do aviso deve ter ate ${NOTICE_LIMIT} caracteres`, 422);
     }
 
-    const conversations = await Conversation.findAll({
-      where: {
-        status: {
-          [Op.in]: ACTIVE_STATUSES
-        }
-      }
-    });
+    const conversations = await Conversation.findAll();
 
     const payloadBase = {
       id: `notice-${Date.now()}`,
@@ -42,7 +33,6 @@ class BroadcastService {
     };
 
     const onlineConversationIds = [];
-    const offlineConversations = [];
 
     conversations.forEach(conversation => {
       const payload = {
@@ -54,14 +44,11 @@ class BroadcastService {
 
       if (hasClientInConversation(conversation.id)) {
         onlineConversationIds.push(conversation.id);
-        return;
       }
-
-      offlineConversations.push(conversation);
     });
 
     await Promise.allSettled(
-      offlineConversations.map(conversation =>
+      conversations.map(conversation =>
         PushService.notifyBroadcastNotice(payloadBase, conversation)
       )
     );
@@ -70,7 +57,7 @@ class BroadcastService {
       success: true,
       total_conversations: conversations.length,
       online_conversations: onlineConversationIds.length,
-      push_conversations: offlineConversations.length
+      push_conversations: conversations.length
     };
   }
 }
