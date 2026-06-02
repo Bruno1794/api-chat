@@ -565,7 +565,13 @@ class PushService {
                   message: error.message
                 });
 
-                if ([404, 410].includes(error.statusCode)) {
+                if (
+                  [403, 404, 410].includes(error.statusCode) &&
+                  (
+                    [404, 410].includes(error.statusCode) ||
+                    String(error.body || '').includes('VAPID credentials')
+                  )
+                ) {
                   await record.destroy();
                 }
               }
