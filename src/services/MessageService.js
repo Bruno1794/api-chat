@@ -99,6 +99,7 @@ class MessageService {
     });
 
     void PushService.notifyClientMessage(payload, conversation).catch(() => undefined);
+    void PushService.notifyAdminMessage(payload, conversation).catch(() => undefined);
 
     return payload;
   }

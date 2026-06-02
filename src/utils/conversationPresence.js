@@ -160,9 +160,24 @@ function hasClientInConversation(conversationId) {
   return getPresencePayload(conversationId).clientes > 0;
 }
 
+function hasAttendantInConversation(conversationId, userId = null) {
+  const presence = getPresencePayload(conversationId);
+
+  if (!userId) {
+    return presence.atendentes > 0;
+  }
+
+  return presence.participants.some(
+    item =>
+      item.participant_type === 'ATENDENTE' &&
+      String(item.actor_id || '') === String(userId)
+  );
+}
+
 module.exports = {
   getConversationId,
   getPresencePayload,
+  hasAttendantInConversation,
   hasClientInConversation,
   joinConversationPresence,
   leaveConversationPresence,

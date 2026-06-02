@@ -3,8 +3,16 @@ const { Op } = require('sequelize');
 
 const ApiError = require('../utils/ApiError');
 const ClienteService = require('./ClienteService');
-const { hasClientInConversation } = require('../utils/conversationPresence');
-const { Conversation, PushAlertSubscription, PushSubscription } = require('../models');
+const {
+  hasAttendantInConversation,
+  hasClientInConversation
+} = require('../utils/conversationPresence');
+const {
+  Conversation,
+  PushAlertSubscription,
+  PushSubscription,
+  User
+} = require('../models');
 
 const PUSHALERT_DEFAULT_SEND_URL = 'https://api.pushalert.co/rest/v1/send';
 const NOTIFICATION_PREVIEW_LIMIT = 120;
@@ -97,6 +105,46 @@ class PushService {
     };
   }
 
+  async subscribeAdmin(data, user, userAgent = null) {
+    const subscription = data.subscription;
+
+    if (!user) {
+      throw new ApiError('JWT obrigatorio para assinar notificacoes do painel', 401);
+    }
+
+    if (!subscription?.endpoint || !subscription?.keys?.p256dh || !subscription?.keys?.auth) {
+      throw new ApiError('Assinatura push invalida', 422);
+    }
+
+    const [record] = await PushSubscription.findOrCreate({
+      where: {
+        endpoint: subscription.endpoint
+      },
+      defaults: {
+        cliente_id_externo: null,
+        user_id: user.id,
+        conversation_id: null,
+        endpoint: subscription.endpoint,
+        p256dh: subscription.keys.p256dh,
+        auth: subscription.keys.auth,
+        user_agent: userAgent
+      }
+    });
+
+    if (!record.isNewRecord) {
+      await record.update({
+        user_id: user.id,
+        p256dh: subscription.keys.p256dh,
+        auth: subscription.keys.auth,
+        user_agent: userAgent
+      });
+    }
+
+    return {
+      success: true
+    };
+  }
+
   async subscribePushAlert(data, userAgent = null) {
     const { cliente, conversationId } = await this.validateClientConversation(data);
     const subscriberId = String(data.subscriber_id || data.subscriberId || '').trim();
@@ -170,6 +218,36 @@ class PushService {
 
     return {
       title: 'Nova resposta do suporte',
+      body,
+      url,
+      conversation_id: conversation.id,
+      icon: iconUrl,
+      badge: iconUrl
+    };
+  }
+
+  buildAdminNotificationData(message, conversation) {
+    const textPreview = String(message.message || '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    const attachmentPreview =
+      message.message_type === 'IMAGE'
+        ? 'Cliente enviou uma imagem'
+        : message.message_type === 'AUDIO'
+          ? 'Cliente enviou um audio'
+          : message.message_type === 'FILE'
+            ? 'Cliente enviou um arquivo'
+            : 'Cliente enviou uma mensagem';
+    const body =
+      textPreview.length > NOTIFICATION_PREVIEW_LIMIT
+        ? `${textPreview.slice(0, NOTIFICATION_PREVIEW_LIMIT - 1)}...`
+        : textPreview || attachmentPreview;
+    const frontendUrl = (process.env.FRONTEND_URL || '').replace(/\/$/, '');
+    const url = frontendUrl ? `${frontendUrl}/dashboard?tab=chats` : '/dashboard?tab=chats';
+    const iconUrl = frontendUrl ? `${frontendUrl}/icons/icon-192.png` : undefined;
+
+    return {
+      title: 'Nova mensagem de cliente',
       body,
       url,
       conversation_id: conversation.id,
@@ -354,6 +432,73 @@ class PushService {
       this.notifyWebPush(data, conversation),
       this.notifyPushAlert(data, conversation)
     ]);
+  }
+
+  async notifyAdminMessage(message, conversation) {
+    if (message.sender_type !== 'CLIENTE') {
+      return;
+    }
+
+    if (!this.enabled) {
+      this.configure();
+    }
+
+    if (!this.enabled) {
+      return;
+    }
+
+    const where = conversation.atendente_id
+      ? {
+          [Op.or]: [{ id: conversation.atendente_id }, { role: 'ADMIN' }]
+        }
+      : {
+          role: {
+            [Op.in]: ['ADMIN', 'ATENDENTE']
+          }
+        };
+    const users = await User.findAll({ where });
+    const targetUserIds = users
+      .map(user => user.id)
+      .filter(userId => !hasAttendantInConversation(conversation.id, userId));
+
+    if (targetUserIds.length === 0) {
+      return;
+    }
+
+    const subscriptions = await PushSubscription.findAll({
+      where: {
+        user_id: {
+          [Op.in]: targetUserIds
+        }
+      }
+    });
+
+    if (subscriptions.length === 0) {
+      return;
+    }
+
+    const payload = JSON.stringify(this.buildAdminNotificationData(message, conversation));
+
+    await Promise.allSettled(
+      subscriptions.map(async record => {
+        try {
+          await webPush.sendNotification(
+            {
+              endpoint: record.endpoint,
+              keys: {
+                p256dh: record.p256dh,
+                auth: record.auth
+              }
+            },
+            payload
+          );
+        } catch (error) {
+          if ([404, 410].includes(error.statusCode)) {
+            await record.destroy();
+          }
+        }
+      })
+    );
   }
 }
 
