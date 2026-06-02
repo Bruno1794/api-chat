@@ -12,6 +12,12 @@ class PushController {
     return res.status(201).json(result);
   });
 
+  subscribePushAlert = asyncHandler(async (req, res) => {
+    const result = await PushService.subscribePushAlert(req.body, req.headers['user-agent'] || null);
+
+    return res.status(201).json(result);
+  });
+
   unsubscribe = asyncHandler(async (req, res) => {
     const result = await PushService.unsubscribe(req.body);
 

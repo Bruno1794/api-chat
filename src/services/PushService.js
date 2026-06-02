@@ -4,7 +4,7 @@ const { Op } = require('sequelize');
 const ApiError = require('../utils/ApiError');
 const ClienteService = require('./ClienteService');
 const { hasClientInConversation } = require('../utils/conversationPresence');
-const { Conversation, PushSubscription } = require('../models');
+const { Conversation, PushAlertSubscription, PushSubscription } = require('../models');
 
 class PushService {
   constructor() {
@@ -31,30 +31,38 @@ class PushService {
   getPublicConfig() {
     return {
       enabled: Boolean(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY),
-      publicKey: process.env.VAPID_PUBLIC_KEY || null
+      publicKey: process.env.VAPID_PUBLIC_KEY || null,
+      pushAlertEnabled: Boolean(process.env.PUSHALERT_REST_API_KEY)
     };
   }
 
-  async subscribe(data, userAgent = null) {
+  async validateClientConversation(data) {
     const cliente = await ClienteService.findByAccessCode(data.codigo || data.code);
+    const conversationId = data.conversation_id || null;
+
+    if (!conversationId) {
+      return { cliente, conversationId };
+    }
+
+    const conversation = await Conversation.findByPk(conversationId);
+
+    if (!conversation) {
+      throw new ApiError('Conversa nao encontrada', 404);
+    }
+
+    if (String(conversation.cliente_id_externo) !== String(cliente.id)) {
+      throw new ApiError('Codigo de acesso nao pertence a esta conversa', 403);
+    }
+
+    return { cliente, conversationId };
+  }
+
+  async subscribe(data, userAgent = null) {
+    const { cliente, conversationId } = await this.validateClientConversation(data);
     const subscription = data.subscription;
 
     if (!subscription?.endpoint || !subscription?.keys?.p256dh || !subscription?.keys?.auth) {
       throw new ApiError('Assinatura push invalida', 422);
-    }
-
-    let conversationId = data.conversation_id || null;
-
-    if (conversationId) {
-      const conversation = await Conversation.findByPk(conversationId);
-
-      if (!conversation) {
-        throw new ApiError('Conversa nao encontrada', 404);
-      }
-
-      if (String(conversation.cliente_id_externo) !== String(cliente.id)) {
-        throw new ApiError('Codigo de acesso nao pertence a esta conversa', 403);
-      }
     }
 
     const [record] = await PushSubscription.findOrCreate({
@@ -86,6 +94,39 @@ class PushService {
     };
   }
 
+  async subscribePushAlert(data, userAgent = null) {
+    const { cliente, conversationId } = await this.validateClientConversation(data);
+    const subscriberId = String(data.subscriber_id || data.subscriberId || '').trim();
+
+    if (!subscriberId) {
+      throw new ApiError('subscriber_id e obrigatorio', 422);
+    }
+
+    const [record] = await PushAlertSubscription.findOrCreate({
+      where: {
+        subscriber_id: subscriberId
+      },
+      defaults: {
+        cliente_id_externo: String(cliente.id),
+        conversation_id: conversationId,
+        subscriber_id: subscriberId,
+        user_agent: userAgent
+      }
+    });
+
+    if (!record.isNewRecord) {
+      await record.update({
+        cliente_id_externo: String(cliente.id),
+        conversation_id: conversationId,
+        user_agent: userAgent
+      });
+    }
+
+    return {
+      success: true
+    };
+  }
+
   async unsubscribe(data) {
     const endpoint = data.endpoint || data.subscription?.endpoint;
 
@@ -104,7 +145,7 @@ class PushService {
     };
   }
 
-  buildNotificationPayload(message, conversation) {
+  buildNotificationData(message, conversation) {
     const body = message.message || (
       message.message_type === 'IMAGE'
         ? 'Imagem recebida'
@@ -115,21 +156,17 @@ class PushService {
     const frontendUrl = (process.env.FRONTEND_URL || '').replace(/\/$/, '');
     const url = frontendUrl ? `${frontendUrl}/chat` : '/chat';
 
-    return JSON.stringify({
+    return {
       title: 'Nova mensagem no suporte',
       body,
       url,
       conversation_id: conversation.id,
       icon: '/icons/icon-192.png',
       badge: '/icons/icon-192.png'
-    });
+    };
   }
 
-  async notifyClientMessage(message, conversation) {
-    if (message.sender_type !== 'ATENDENTE' || hasClientInConversation(conversation.id)) {
-      return;
-    }
-
+  async notifyWebPush(data, conversation) {
     if (!this.enabled) {
       this.configure();
     }
@@ -149,7 +186,7 @@ class PushService {
       return;
     }
 
-    const payload = this.buildNotificationPayload(message, conversation);
+    const payload = JSON.stringify(data);
 
     await Promise.allSettled(
       subscriptions.map(async record => {
@@ -171,6 +208,61 @@ class PushService {
         }
       })
     );
+  }
+
+  async notifyPushAlert(data, conversation) {
+    const apiKey = process.env.PUSHALERT_REST_API_KEY;
+
+    if (!apiKey) {
+      return;
+    }
+
+    const subscriptions = await PushAlertSubscription.findAll({
+      where: {
+        cliente_id_externo: String(conversation.cliente_id_externo),
+        [Op.or]: [{ conversation_id: conversation.id }, { conversation_id: null }]
+      }
+    });
+
+    if (subscriptions.length === 0) {
+      return;
+    }
+
+    const sendUrl = process.env.PUSHALERT_SEND_URL || 'https://api.pushalert.co/rest/v1/send';
+
+    await Promise.allSettled(
+      subscriptions.map(async record => {
+        const form = new URLSearchParams({
+          title: data.title,
+          message: data.body,
+          url: data.url,
+          icon: data.icon,
+          subscriber: record.subscriber_id
+        });
+
+        await fetch(sendUrl, {
+          method: 'POST',
+          headers: {
+            Authorization: `api_key=${apiKey}`,
+            'Content-Type': 'application/x-www-form-urlencoded'
+          },
+          body: form.toString()
+        });
+      })
+    );
+  }
+
+  async notifyClientMessage(message, conversation) {
+    if (message.sender_type !== 'ATENDENTE' || hasClientInConversation(conversation.id)) {
+      return;
+    }
+
+    const data = this.buildNotificationData(message, conversation);
+
+    await Promise.allSettled([
+      this.notifyWebPush(data, conversation),
+      this.notifyPushAlert(data, conversation)
+    ]);
   }
 }
 
