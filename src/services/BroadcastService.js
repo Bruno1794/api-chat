@@ -1,5 +1,7 @@
 const PushService = require('./PushService');
-const { Conversation } = require('../models');
+const ConversationService = require('./ConversationService');
+const MessageService = require('./MessageService');
+const { Conversation, Message } = require('../models');
 const ApiError = require('../utils/ApiError');
 const socket = require('../utils/socket');
 const { hasClientInConversation } = require('../utils/conversationPresence');
@@ -21,8 +23,7 @@ class BroadcastService {
 
     const conversations = await Conversation.findAll();
 
-    const payloadBase = {
-      id: `notice-${Date.now()}`,
+    const notificationBase = {
       title,
       message,
       created_at: new Date().toISOString(),
@@ -33,31 +34,48 @@ class BroadcastService {
     };
 
     const onlineConversationIds = [];
+    const createdMessages = [];
 
-    conversations.forEach(conversation => {
-      const payload = {
-        ...payloadBase,
-        conversation_id: conversation.id
-      };
+    const results = await Promise.allSettled(
+      conversations.map(async conversation => {
+        if (hasClientInConversation(conversation.id)) {
+          onlineConversationIds.push(conversation.id);
+        }
 
-      socket.emitToConversation(conversation.id, 'broadcast_notice', payload);
+        const savedMessage = await Message.create({
+          conversation_id: conversation.id,
+          sender_type: 'ATENDENTE',
+          sender_id: user.id,
+          message,
+          message_type: 'TEXT',
+          read: false
+        });
 
-      if (hasClientInConversation(conversation.id)) {
-        onlineConversationIds.push(conversation.id);
-      }
-    });
+        await ConversationService.updateLastInteraction(conversation, savedMessage);
 
-    await Promise.allSettled(
-      conversations.map(conversation =>
-        PushService.notifyBroadcastNotice(payloadBase, conversation)
-      )
+        const payload = await MessageService.findMessagePayload(savedMessage.id);
+
+        socket.emitToConversation(conversation.id, 'message_received', payload);
+        socket.emitToConversation(conversation.id, 'message_sent', payload);
+        socket.emitToAll('conversation_updated', {
+          conversation_id: conversation.id
+        });
+
+        await PushService.notifyBroadcastNotice(notificationBase, conversation);
+
+        createdMessages.push(payload);
+
+        return payload;
+      })
     );
 
     return {
       success: true,
       total_conversations: conversations.length,
+      messages_created: createdMessages.length,
+      failed_conversations: results.filter(result => result.status === 'rejected').length,
       online_conversations: onlineConversationIds.length,
-      push_conversations: conversations.length
+      push_conversations: createdMessages.length
     };
   }
 }
