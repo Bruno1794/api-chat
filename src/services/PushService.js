@@ -6,6 +6,8 @@ const ClienteService = require('./ClienteService');
 const { hasClientInConversation } = require('../utils/conversationPresence');
 const { Conversation, PushAlertSubscription, PushSubscription } = require('../models');
 
+const PUSHALERT_DEFAULT_SEND_URL = 'https://api.pushalert.co/rest/v1/send';
+
 class PushService {
   constructor() {
     this.configure();
@@ -212,7 +214,7 @@ class PushService {
   }
 
   async notifyPushAlert(data, conversation) {
-    const apiKey = process.env.PUSHALERT_REST_API_KEY;
+    const apiKey = (process.env.PUSHALERT_REST_API_KEY || '').trim();
 
     if (!apiKey) {
       return;
@@ -233,7 +235,7 @@ class PushService {
       return;
     }
 
-    const sendUrl = process.env.PUSHALERT_SEND_URL || 'https://api.pushalert.co/rest/v1/send';
+    const sendUrl = (process.env.PUSHALERT_SEND_URL || PUSHALERT_DEFAULT_SEND_URL).trim();
 
     await Promise.allSettled(
       subscriptions.map(async record => {
@@ -263,6 +265,7 @@ class PushService {
 
         if (!response.ok) {
           console.error('PushAlert envio falhou', {
+            sendUrl,
             status: response.status,
             body: responseText,
             subscriber_id: record.subscriber_id
@@ -275,6 +278,7 @@ class PushService {
 
           if (output && output.success === false) {
             console.error('PushAlert envio recusado', {
+              sendUrl,
               body: output,
               subscriber_id: record.subscriber_id
             });
@@ -285,6 +289,7 @@ class PushService {
         }
 
         console.log('PushAlert envio solicitado', {
+          sendUrl,
           status: response.status,
           body: responseText,
           subscriber_id: record.subscriber_id
