@@ -1,6 +1,6 @@
 const conversationPresence = new Map();
 const CLIENT_PRESENCE_TTL_MS = 15000;
-const ATTENDANT_PRESENCE_TTL_MS = 60000;
+const ATTENDANT_PRESENCE_TTL_MS = 30000;
 
 function isPresenceExpired(item, now = Date.now()) {
   const lastSeen = new Date(item.last_seen_at || item.joined_at).getTime();
