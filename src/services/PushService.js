@@ -654,6 +654,73 @@ class PushService {
       })
     );
   }
+
+  async testAdminPush(user) {
+    if (!user) {
+      throw new ApiError('JWT obrigatorio para testar notificacoes do painel', 401);
+    }
+
+    const data = {
+      title: 'Teste SuporteSync',
+      body: 'Notificacao do painel administrativo ativada neste dispositivo.',
+      url: `${(process.env.FRONTEND_URL || '').replace(/\/$/, '') || ''}/dashboard?tab=chats`,
+      conversation_id: 'admin-test',
+      icon: `${(process.env.FRONTEND_URL || '').replace(/\/$/, '') || ''}/icons/icon-192.png`,
+      badge: `${(process.env.FRONTEND_URL || '').replace(/\/$/, '') || ''}/icons/icon-192.png`
+    };
+    const webPushSubscriptions = await PushSubscription.findAll({
+      where: {
+        user_id: user.id
+      }
+    });
+    const pushAlertSubscriptions = await PushAlertSubscription.findAll({
+      where: {
+        user_id: user.id
+      }
+    });
+    const payload = JSON.stringify(data);
+
+    if (!this.enabled) {
+      this.configure();
+    }
+
+    if (this.enabled) {
+      await Promise.allSettled(
+        webPushSubscriptions.map(async record => {
+          try {
+            await webPush.sendNotification(
+              {
+                endpoint: record.endpoint,
+                keys: {
+                  p256dh: record.p256dh,
+                  auth: record.auth
+                }
+              },
+              payload
+            );
+          } catch (error) {
+            if (
+              [403, 404, 410].includes(error.statusCode) &&
+              (
+                [404, 410].includes(error.statusCode) ||
+                String(error.body || '').includes('VAPID credentials')
+              )
+            ) {
+              await record.destroy();
+            }
+          }
+        })
+      );
+    }
+
+    await this.notifyAdminPushAlert(data, [user.id], { id: 'admin-test' });
+
+    return {
+      success: true,
+      webpush_subscriptions: webPushSubscriptions.length,
+      pushalert_subscriptions: pushAlertSubscriptions.length
+    };
+  }
 }
 
 module.exports = new PushService();

@@ -38,6 +38,12 @@ class PushController {
     return res.status(201).json(result);
   });
 
+  testAdmin = asyncHandler(async (req, res) => {
+    const result = await PushService.testAdminPush(req.user);
+
+    return res.json(result);
+  });
+
   unsubscribe = asyncHandler(async (req, res) => {
     const result = await PushService.unsubscribe(req.body);
 
