@@ -15,6 +15,11 @@ const {
 
 const PUSHALERT_DEFAULT_SEND_URL = 'https://api.pushalert.co/rest/v1/send';
 const NOTIFICATION_PREVIEW_LIMIT = 120;
+const DEFAULT_FRONTEND_URL = 'https://atendimento.sytes.net';
+
+function getFrontendUrl() {
+  return (process.env.FRONTEND_URL || DEFAULT_FRONTEND_URL).replace(/\/$/, '');
+}
 
 class PushService {
   constructor() {
@@ -247,9 +252,9 @@ class PushService {
       textPreview.length > NOTIFICATION_PREVIEW_LIMIT
         ? `${textPreview.slice(0, NOTIFICATION_PREVIEW_LIMIT - 1)}...`
         : textPreview || attachmentPreview;
-    const frontendUrl = (process.env.FRONTEND_URL || '').replace(/\/$/, '');
-    const url = frontendUrl ? `${frontendUrl}/chat` : '/chat';
-    const iconUrl = frontendUrl ? `${frontendUrl}/icons/icon-192.png` : undefined;
+    const frontendUrl = getFrontendUrl();
+    const url = `${frontendUrl}/chat`;
+    const iconUrl = `${frontendUrl}/icons/icon-192.png`;
 
     return {
       title: 'Nova resposta do suporte',
@@ -277,9 +282,9 @@ class PushService {
       textPreview.length > NOTIFICATION_PREVIEW_LIMIT
         ? `${textPreview.slice(0, NOTIFICATION_PREVIEW_LIMIT - 1)}...`
         : textPreview || attachmentPreview;
-    const frontendUrl = (process.env.FRONTEND_URL || '').replace(/\/$/, '');
-    const url = frontendUrl ? `${frontendUrl}/dashboard?tab=chats` : '/dashboard?tab=chats';
-    const iconUrl = frontendUrl ? `${frontendUrl}/icons/icon-192.png` : undefined;
+    const frontendUrl = getFrontendUrl();
+    const url = `${frontendUrl}/dashboard?tab=chats`;
+    const iconUrl = `${frontendUrl}/icons/icon-192.png`;
     let cliente = null;
 
     try {
@@ -313,9 +318,9 @@ class PushService {
       textPreview.length > NOTIFICATION_PREVIEW_LIMIT
         ? `${textPreview.slice(0, NOTIFICATION_PREVIEW_LIMIT - 1)}...`
         : textPreview || 'Voce recebeu um aviso do suporte.';
-    const frontendUrl = (process.env.FRONTEND_URL || '').replace(/\/$/, '');
-    const url = frontendUrl ? `${frontendUrl}/chat` : '/chat';
-    const iconUrl = frontendUrl ? `${frontendUrl}/icons/icon-192.png` : undefined;
+    const frontendUrl = getFrontendUrl();
+    const url = `${frontendUrl}/chat`;
+    const iconUrl = `${frontendUrl}/icons/icon-192.png`;
 
     return {
       title: notice.title || 'Aviso do suporte',
@@ -663,10 +668,10 @@ class PushService {
     const data = {
       title: 'Teste SuporteSync',
       body: 'Notificacao do painel administrativo ativada neste dispositivo.',
-      url: `${(process.env.FRONTEND_URL || '').replace(/\/$/, '') || ''}/dashboard?tab=chats`,
+      url: `${getFrontendUrl()}/dashboard?tab=chats`,
       conversation_id: 'admin-test',
-      icon: `${(process.env.FRONTEND_URL || '').replace(/\/$/, '') || ''}/icons/icon-192.png`,
-      badge: `${(process.env.FRONTEND_URL || '').replace(/\/$/, '') || ''}/icons/icon-192.png`
+      icon: `${getFrontendUrl()}/icons/icon-192.png`,
+      badge: `${getFrontendUrl()}/icons/icon-192.png`
     };
     const webPushSubscriptions = await PushSubscription.findAll({
       where: {

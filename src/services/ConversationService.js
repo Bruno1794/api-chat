@@ -9,6 +9,12 @@ const {
 const ClienteService = require('./ClienteService');
 const { Conversation, Message, Note, User } = require('../models');
 
+const DEFAULT_FRONTEND_URL = 'https://atendimento.sytes.net';
+
+function getFrontendUrl() {
+  return (process.env.FRONTEND_URL || DEFAULT_FRONTEND_URL).replace(/\/$/, '');
+}
+
 class ConversationService {
   async list({ user, query = {} }) {
     const where = {};
@@ -130,7 +136,7 @@ class ConversationService {
     const cliente = await ClienteService.findById(clienteId);
     const codigo = generateClientAccessCode(cliente);
     const referencia = cliente.referencia || cliente.usuario_referencia;
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const frontendUrl = getFrontendUrl();
 
     return {
       cliente,
