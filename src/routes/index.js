@@ -11,6 +11,7 @@ const uploadRoutes = require('./upload.routes');
 const shortcutRoutes = require('./shortcuts.routes');
 const pushRoutes = require('./push.routes');
 const broadcastRoutes = require('./broadcasts.routes');
+const maintenanceRoutes = require('./maintenance.routes');
 
 const router = Router();
 
@@ -24,6 +25,7 @@ router.use('/notes', noteRoutes);
 router.use('/shortcuts', shortcutRoutes);
 router.use('/push', pushRoutes);
 router.use('/broadcasts', broadcastRoutes);
+router.use('/maintenance', maintenanceRoutes);
 router.use(uploadRoutes);
 
 module.exports = router;

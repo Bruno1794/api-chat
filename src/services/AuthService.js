@@ -71,6 +71,36 @@ class AuthService {
     return user;
   }
 
+  async changePassword(userId, { senha_atual, nova_senha }) {
+    if (!senha_atual || !nova_senha) {
+      throw new ApiError('Senha atual e nova senha sao obrigatorias', 422);
+    }
+
+    if (String(nova_senha).length < 6) {
+      throw new ApiError('A nova senha deve ter pelo menos 6 caracteres', 422);
+    }
+
+    const user = await User.findByPk(userId);
+
+    if (!user) {
+      throw new ApiError('Usuario nao encontrado', 404);
+    }
+
+    const passwordValid = await user.checkPassword(senha_atual);
+
+    if (!passwordValid) {
+      throw new ApiError('Senha atual invalida', 401);
+    }
+
+    await user.update({
+      senha: nova_senha
+    });
+
+    return {
+      success: true
+    };
+  }
+
   async refresh(refreshToken) {
     if (!refreshToken) {
       throw new ApiError('Refresh token não informado', 401);

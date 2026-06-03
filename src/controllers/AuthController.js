@@ -20,6 +20,12 @@ class AuthController {
     return res.json(user);
   });
 
+  changePassword = asyncHandler(async (req, res) => {
+    const result = await AuthService.changePassword(req.user.id, req.body);
+
+    return res.json(result);
+  });
+
   refresh = asyncHandler(async (req, res) => {
     const result = await AuthService.refresh(req.body.refreshToken);
 

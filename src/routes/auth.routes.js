@@ -9,5 +9,6 @@ router.post('/login', AuthController.login);
 router.post('/refresh', AuthController.refresh);
 router.post('/logout', authMiddleware, AuthController.logout);
 router.get('/me', authMiddleware, AuthController.me);
+router.put('/password', authMiddleware, AuthController.changePassword);
 
 module.exports = router;
