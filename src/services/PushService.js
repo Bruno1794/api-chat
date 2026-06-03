@@ -21,6 +21,10 @@ function getFrontendUrl() {
   return (process.env.FRONTEND_URL || DEFAULT_FRONTEND_URL).replace(/\/$/, '');
 }
 
+function getNotificationIconUrl() {
+  return `${getFrontendUrl()}/icons/atendimento-192.png`;
+}
+
 class PushService {
   constructor() {
     this.configure();
@@ -254,7 +258,7 @@ class PushService {
         : textPreview || attachmentPreview;
     const frontendUrl = getFrontendUrl();
     const url = `${frontendUrl}/chat`;
-    const iconUrl = `${frontendUrl}/icons/icon-192.png`;
+    const iconUrl = getNotificationIconUrl();
 
     return {
       title: 'Nova resposta do suporte',
@@ -284,7 +288,7 @@ class PushService {
         : textPreview || attachmentPreview;
     const frontendUrl = getFrontendUrl();
     const url = `${frontendUrl}/dashboard?tab=chats`;
-    const iconUrl = `${frontendUrl}/icons/icon-192.png`;
+    const iconUrl = getNotificationIconUrl();
     let cliente = null;
 
     try {
@@ -320,7 +324,7 @@ class PushService {
         : textPreview || 'Voce recebeu um aviso do suporte.';
     const frontendUrl = getFrontendUrl();
     const url = `${frontendUrl}/chat`;
-    const iconUrl = `${frontendUrl}/icons/icon-192.png`;
+    const iconUrl = getNotificationIconUrl();
 
     return {
       title: notice.title || 'Aviso do suporte',
@@ -670,8 +674,8 @@ class PushService {
       body: 'Notificacao do painel administrativo ativada neste dispositivo.',
       url: `${getFrontendUrl()}/dashboard?tab=chats`,
       conversation_id: 'admin-test',
-      icon: `${getFrontendUrl()}/icons/icon-192.png`,
-      badge: `${getFrontendUrl()}/icons/icon-192.png`
+      icon: getNotificationIconUrl(),
+      badge: getNotificationIconUrl()
     };
     const webPushSubscriptions = await PushSubscription.findAll({
       where: {
