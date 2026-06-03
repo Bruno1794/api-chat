@@ -1,5 +1,6 @@
+const { Op } = require('sequelize');
+
 const {
-  Sequelize,
   Attachment,
   Conversation,
   Message,
@@ -9,8 +10,6 @@ const {
   PushSubscription,
   sequelize
 } = require('../models');
-
-const { Op } = Sequelize;
 
 class MaintenanceService {
   async clearOperationalData(user) {
