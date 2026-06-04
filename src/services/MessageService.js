@@ -4,6 +4,7 @@ const ConversationService = require('./ConversationService');
 const { Conversation, Message, Attachment, MessageReaction } = require('../models');
 const ClienteService = require('./ClienteService');
 const PushService = require('./PushService');
+const UploadService = require('./UploadService');
 
 const messageIncludes = [
   {
@@ -44,11 +45,14 @@ class MessageService {
   }
 
   async create(data, user = null) {
+    const inlineAttachments = this.buildInlineAttachments(data.inline_attachments || []);
+    const attachments = [...(data.attachments || []), ...inlineAttachments];
+
     if (!data.conversation_id || !data.sender_type) {
       throw new ApiError('conversation_id e sender_type sao obrigatorios', 422);
     }
 
-    if (!data.message && !data.attachments?.length) {
+    if (!data.message && !attachments.length) {
       throw new ApiError('Mensagem ou anexo e obrigatorio', 422);
     }
 
@@ -79,10 +83,13 @@ class MessageService {
       read: Boolean(data.read)
     });
 
-    if (data.attachments?.length) {
+    if (attachments.length) {
       await Attachment.bulkCreate(
-        data.attachments.map(attachment => ({
-          ...attachment,
+        attachments.map(attachment => ({
+          filename: attachment.filename,
+          path: attachment.path,
+          mime_type: attachment.mime_type,
+          size: attachment.size,
           message_id: message.id
         }))
       );
@@ -102,6 +109,20 @@ class MessageService {
     void PushService.notifyAdminMessage(payload, conversation).catch(() => undefined);
 
     return payload;
+  }
+
+  buildInlineAttachments(inlineAttachments) {
+    if (!Array.isArray(inlineAttachments) || !inlineAttachments.length) {
+      return [];
+    }
+
+    return inlineAttachments.map(attachment =>
+      UploadService.saveBase64Image({
+        filename: attachment.filename,
+        mime_type: attachment.mime_type,
+        data: attachment.data
+      })
+    );
   }
 
   async update(id, data, user = null) {
