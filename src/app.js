@@ -16,7 +16,7 @@ app.use(helmet());
 
 app.use(cors(createCorsOptions()));
 
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '25mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 if (process.env.NODE_ENV !== 'test') {

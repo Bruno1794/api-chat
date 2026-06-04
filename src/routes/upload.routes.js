@@ -7,6 +7,7 @@ const upload = require('../middlewares/uploadMiddleware');
 const router = Router();
 
 router.post('/upload', optionalAuthMiddleware, upload.single('file'), UploadController.upload);
+router.post('/upload/base64', optionalAuthMiddleware, UploadController.uploadBase64);
 router.get('/files/:filename', UploadController.download);
 
 module.exports = router;

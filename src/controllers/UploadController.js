@@ -8,6 +8,12 @@ class UploadController {
     return res.status(201).json(file);
   });
 
+  uploadBase64 = asyncHandler(async (req, res) => {
+    const file = UploadService.saveBase64Image(req.body);
+
+    return res.status(201).json(file);
+  });
+
   download = asyncHandler(async (req, res) => {
     const filePath = UploadService.getUploadPath(req.params.filename);
 
