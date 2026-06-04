@@ -16,7 +16,9 @@ const allowedBase64MimeTypes = new Map([
   ['image/jpeg', '.jpg'],
   ['image/jpg', '.jpg'],
   ['image/png', '.png'],
-  ['image/webp', '.webp']
+  ['image/webp', '.webp'],
+  ['image/heic', '.heic'],
+  ['image/heif', '.heif']
 ]);
 
 class UploadService {
