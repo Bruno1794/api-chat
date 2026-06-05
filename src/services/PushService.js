@@ -1,4 +1,5 @@
 const webPush = require('web-push');
+const axios = require('axios');
 const { Op } = require('sequelize');
 
 const ApiError = require('../utils/ApiError');
@@ -8,12 +9,14 @@ const {
 } = require('../utils/conversationPresence');
 const {
   Conversation,
+  ExpoPushToken,
   PushAlertSubscription,
   PushSubscription,
   User
 } = require('../models');
 
 const PUSHALERT_DEFAULT_SEND_URL = 'https://api.pushalert.co/rest/v1/send';
+const EXPO_PUSH_SEND_URL = 'https://exp.host/--/api/v2/push/send';
 const NOTIFICATION_PREVIEW_LIMIT = 120;
 const DEFAULT_FRONTEND_URL = 'https://atendimento.sytes.net';
 
@@ -23,6 +26,20 @@ function getFrontendUrl() {
 
 function getNotificationIconUrl() {
   return `${getFrontendUrl()}/icons/atendimento-192.png`;
+}
+
+function isExpoPushToken(value) {
+  return /^(ExponentPushToken|ExpoPushToken)\[[^\]]+\]$/.test(String(value || '').trim());
+}
+
+function chunkItems(items, size) {
+  const chunks = [];
+
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+
+  return chunks;
 }
 
 class PushService {
@@ -214,6 +231,44 @@ class PushService {
       await record.update({
         user_id: user.id,
         user_agent: userAgent
+      });
+    }
+
+    return {
+      success: true
+    };
+  }
+
+  async subscribeAdminExpo(data, user, userAgent = null) {
+    if (!user) {
+      throw new ApiError('JWT obrigatorio para registrar notificacoes mobile', 401);
+    }
+
+    const token = String(data.token || data.expo_push_token || data.expoPushToken || '').trim();
+
+    if (!isExpoPushToken(token)) {
+      throw new ApiError('Expo push token invalido', 422);
+    }
+
+    const [record] = await ExpoPushToken.findOrCreate({
+      where: { token },
+      defaults: {
+        user_id: user.id,
+        token,
+        platform: data.platform || null,
+        device_name: data.device_name || data.deviceName || null,
+        user_agent: userAgent,
+        last_registered_at: new Date()
+      }
+    });
+
+    if (!record.isNewRecord) {
+      await record.update({
+        user_id: user.id,
+        platform: data.platform || record.platform,
+        device_name: data.device_name || data.deviceName || record.device_name,
+        user_agent: userAgent,
+        last_registered_at: new Date()
       });
     }
 
@@ -519,7 +574,10 @@ class PushService {
 
     const data = await this.buildAdminNotificationData(message, conversation);
     const payload = JSON.stringify(data);
-    const tasks = [this.notifyAdminPushAlert(data, targetUserIds, conversation)];
+    const tasks = [
+      this.notifyAdminPushAlert(data, targetUserIds, conversation),
+      this.notifyAdminExpoPush(data, targetUserIds, conversation)
+    ];
 
     if (!this.enabled) {
       this.configure();
@@ -596,6 +654,78 @@ class PushService {
     }
 
     await Promise.allSettled(tasks);
+  }
+
+  async notifyAdminExpoPush(data, targetUserIds, conversation) {
+    if (targetUserIds.length === 0) {
+      return;
+    }
+
+    const tokens = await ExpoPushToken.findAll({
+      where: {
+        user_id: {
+          [Op.in]: targetUserIds
+        }
+      }
+    });
+
+    if (tokens.length === 0) {
+      console.log('Expo push admin sem tokens', {
+        conversation_id: conversation.id,
+        target_user_ids: targetUserIds
+      });
+      return;
+    }
+
+    const messages = tokens.map(record => ({
+      to: record.token,
+      title: data.title,
+      body: data.body,
+      sound: 'default',
+      channelId: 'chat-messages',
+      priority: 'high',
+      data: {
+        conversationId: data.conversation_id,
+        conversation_id: data.conversation_id,
+        url: data.url
+      }
+    }));
+
+    await Promise.allSettled(
+      chunkItems(messages, 100).map(async batch => {
+        const response = await axios.post(EXPO_PUSH_SEND_URL, batch, {
+          headers: {
+            Accept: 'application/json',
+            'Accept-Encoding': 'gzip, deflate',
+            'Content-Type': 'application/json'
+          },
+          timeout: 15000
+        });
+
+        const tickets = Array.isArray(response.data?.data) ? response.data.data : [];
+
+        await Promise.allSettled(
+          tickets.map(async (ticket, index) => {
+            if (ticket?.status !== 'error') {
+              return;
+            }
+
+            const failedToken = batch[index]?.to;
+
+            console.error('Expo push admin falhou', {
+              conversation_id: conversation.id,
+              token: String(failedToken || '').slice(0, 32),
+              message: ticket.message,
+              details: ticket.details
+            });
+
+            if (ticket.details?.error === 'DeviceNotRegistered' && failedToken) {
+              await ExpoPushToken.destroy({ where: { token: failedToken } });
+            }
+          })
+        );
+      })
+    );
   }
 
   async notifyAdminPushAlert(data, targetUserIds, conversation) {
@@ -687,6 +817,11 @@ class PushService {
         user_id: user.id
       }
     });
+    const expoPushTokens = await ExpoPushToken.findAll({
+      where: {
+        user_id: user.id
+      }
+    });
     const payload = JSON.stringify(data);
 
     if (!this.enabled) {
@@ -722,12 +857,16 @@ class PushService {
       );
     }
 
-    await this.notifyAdminPushAlert(data, [user.id], { id: 'admin-test' });
+    await Promise.allSettled([
+      this.notifyAdminPushAlert(data, [user.id], { id: 'admin-test' }),
+      this.notifyAdminExpoPush(data, [user.id], { id: 'admin-test' })
+    ]);
 
     return {
       success: true,
       webpush_subscriptions: webPushSubscriptions.length,
-      pushalert_subscriptions: pushAlertSubscriptions.length
+      pushalert_subscriptions: pushAlertSubscriptions.length,
+      expo_push_tokens: expoPushTokens.length
     };
   }
 }

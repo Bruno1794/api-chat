@@ -10,6 +10,8 @@ const noteRoutes = require('./notes.routes');
 const uploadRoutes = require('./upload.routes');
 const shortcutRoutes = require('./shortcuts.routes');
 const pushRoutes = require('./push.routes');
+const PushController = require('../controllers/PushController');
+const authMiddleware = require('../middlewares/authMiddleware');
 const broadcastRoutes = require('./broadcasts.routes');
 const maintenanceRoutes = require('./maintenance.routes');
 
@@ -24,6 +26,7 @@ router.use('/messages', messageRoutes);
 router.use('/notes', noteRoutes);
 router.use('/shortcuts', shortcutRoutes);
 router.use('/push', pushRoutes);
+router.post('/push-tokens', authMiddleware, PushController.subscribeAdminExpo);
 router.use('/broadcasts', broadcastRoutes);
 router.use('/maintenance', maintenanceRoutes);
 router.use(uploadRoutes);

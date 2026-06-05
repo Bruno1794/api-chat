@@ -9,6 +9,7 @@ const Shortcut = require('./Shortcut');
 const MessageReaction = require('./MessageReaction');
 const PushSubscription = require('./PushSubscription');
 const PushAlertSubscription = require('./PushAlertSubscription');
+const ExpoPushToken = require('./ExpoPushToken');
 
 const models = {
   User: User.initModel(sequelize),
@@ -19,7 +20,8 @@ const models = {
   Shortcut: Shortcut.initModel(sequelize),
   MessageReaction: MessageReaction.initModel(sequelize),
   PushSubscription: PushSubscription.initModel(sequelize),
-  PushAlertSubscription: PushAlertSubscription.initModel(sequelize)
+  PushAlertSubscription: PushAlertSubscription.initModel(sequelize),
+  ExpoPushToken: ExpoPushToken.initModel(sequelize)
 };
 
 Object.values(models).forEach(model => {
