@@ -11,6 +11,8 @@ router.post('/admin/subscribe', authMiddleware, PushController.subscribeAdmin);
 router.post('/pushalert/subscribe', PushController.subscribePushAlert);
 router.post('/admin/pushalert/subscribe', authMiddleware, PushController.subscribeAdminPushAlert);
 router.post('/admin/expo/subscribe', authMiddleware, PushController.subscribeAdminExpo);
+router.post('/client/expo/subscribe', PushController.subscribeClientExpo);
+router.post('/expo/subscribe', PushController.subscribeClientExpo);
 router.post('/admin/test', authMiddleware, PushController.testAdmin);
 router.delete('/subscribe', PushController.unsubscribe);
 

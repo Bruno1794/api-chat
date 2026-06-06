@@ -277,6 +277,44 @@ class PushService {
     };
   }
 
+  async subscribeClientExpo(data, userAgent = null) {
+    const { cliente, conversationId } = await this.validateClientConversation(data);
+    const token = String(data.token || data.expo_push_token || data.expoPushToken || '').trim();
+
+    if (!isExpoPushToken(token)) {
+      throw new ApiError('Expo push token invalido', 422);
+    }
+
+    const [record] = await ExpoPushToken.findOrCreate({
+      where: { token },
+      defaults: {
+        user_id: null,
+        cliente_id_externo: String(cliente.id),
+        conversation_id: conversationId,
+        token,
+        platform: data.platform || null,
+        device_name: data.device_name || data.deviceName || null,
+        user_agent: userAgent,
+        last_registered_at: new Date()
+      }
+    });
+
+    if (!record.isNewRecord) {
+      await record.update({
+        user_id: null,
+        cliente_id_externo: String(cliente.id),
+        conversation_id: conversationId || record.conversation_id,
+        platform: data.platform || record.platform,
+        device_name: data.device_name || data.deviceName || record.device_name,
+        user_agent: userAgent,
+        last_registered_at: new Date()
+      });
+    }
+
+    return {
+      success: true
+    };
+  }
   async unsubscribe(data) {
     const endpoint = data.endpoint || data.subscription?.endpoint;
 
@@ -534,16 +572,84 @@ class PushService {
 
     await Promise.allSettled([
       this.notifyWebPush(data, conversation),
-      this.notifyPushAlert(data, conversation)
+      this.notifyPushAlert(data, conversation),
+      this.notifyClientExpoPush(data, conversation)
     ]);
   }
 
+  async notifyClientExpoPush(data, conversation) {
+    const tokens = await ExpoPushToken.findAll({
+      where: {
+        cliente_id_externo: String(conversation.cliente_id_externo),
+        [Op.or]: [{ conversation_id: conversation.id }, { conversation_id: null }]
+      }
+    });
+
+    if (tokens.length === 0) {
+      console.log('Expo push cliente sem tokens', {
+        conversation_id: conversation.id,
+        cliente_id_externo: conversation.cliente_id_externo
+      });
+      return;
+    }
+
+    const messages = tokens.map(record => ({
+      to: record.token,
+      title: data.title,
+      body: data.body,
+      sound: 'default',
+      channelId: 'chat-messages',
+      priority: 'high',
+      data: {
+        conversationId: data.conversation_id,
+        conversation_id: data.conversation_id,
+        url: data.url
+      }
+    }));
+
+    await Promise.allSettled(
+      chunkItems(messages, 100).map(async batch => {
+        const response = await axios.post(EXPO_PUSH_SEND_URL, batch, {
+          headers: {
+            Accept: 'application/json',
+            'Accept-Encoding': 'gzip, deflate',
+            'Content-Type': 'application/json'
+          },
+          timeout: 15000
+        });
+
+        const tickets = Array.isArray(response.data?.data) ? response.data.data : [];
+
+        await Promise.allSettled(
+          tickets.map(async (ticket, index) => {
+            if (ticket?.status !== 'error') {
+              return;
+            }
+
+            const failedToken = batch[index]?.to;
+
+            console.error('Expo push cliente falhou', {
+              conversation_id: conversation.id,
+              token: String(failedToken || '').slice(0, 32),
+              message: ticket.message,
+              details: ticket.details
+            });
+
+            if (ticket.details?.error === 'DeviceNotRegistered' && failedToken) {
+              await ExpoPushToken.destroy({ where: { token: failedToken } });
+            }
+          })
+        );
+      })
+    );
+  }
   async notifyBroadcastNotice(notice, conversation) {
     const data = this.buildBroadcastNotificationData(notice, conversation);
 
     await Promise.allSettled([
       this.notifyWebPush(data, conversation),
-      this.notifyPushAlert(data, conversation)
+      this.notifyPushAlert(data, conversation),
+      this.notifyClientExpoPush(data, conversation)
     ]);
   }
 

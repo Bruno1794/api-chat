@@ -48,6 +48,15 @@ class PushController {
     return res.status(201).json(result);
   });
 
+  subscribeClientExpo = asyncHandler(async (req, res) => {
+    const result = await PushService.subscribeClientExpo(
+      req.body,
+      req.headers['user-agent'] || null
+    );
+
+    return res.status(201).json(result);
+  });
+
   testAdmin = asyncHandler(async (req, res) => {
     const result = await PushService.testAdminPush(req.user);
 

@@ -6,7 +6,17 @@ class ExpoPushToken extends Model {
       {
         user_id: {
           type: DataTypes.INTEGER,
-          allowNull: false
+          allowNull: true
+        },
+
+        cliente_id_externo: {
+          type: DataTypes.STRING,
+          allowNull: true
+        },
+
+        conversation_id: {
+          type: DataTypes.INTEGER,
+          allowNull: true
         },
 
         token: {
