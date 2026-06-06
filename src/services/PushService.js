@@ -288,7 +288,7 @@ class PushService {
     const [record] = await ExpoPushToken.findOrCreate({
       where: { token },
       defaults: {
-        user_id: null,
+        user_id: data.user_id || null,
         cliente_id_externo: String(cliente.id),
         conversation_id: conversationId,
         token,
@@ -301,7 +301,7 @@ class PushService {
 
     if (!record.isNewRecord) {
       await record.update({
-        user_id: null,
+        user_id: record.user_id || data.user_id || null,
         cliente_id_externo: String(cliente.id),
         conversation_id: conversationId || record.conversation_id,
         platform: data.platform || record.platform,
