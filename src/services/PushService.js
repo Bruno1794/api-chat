@@ -42,6 +42,36 @@ function chunkItems(items, size) {
   return chunks;
 }
 
+function cleanNotificationText(value) {
+  return String(value || '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function limitNotificationText(value) {
+  const text = cleanNotificationText(value);
+
+  return text.length > NOTIFICATION_PREVIEW_LIMIT
+    ? `${text.slice(0, NOTIFICATION_PREVIEW_LIMIT - 1)}...`
+    : text;
+}
+
+function getAttachmentPreview(message, senderLabel = 'Mensagem') {
+  if (message.message_type === 'IMAGE') {
+    return `${senderLabel} enviou uma foto`;
+  }
+
+  if (message.message_type === 'AUDIO') {
+    return `${senderLabel} enviou um audio`;
+  }
+
+  if (message.message_type === 'FILE') {
+    return `${senderLabel} enviou um arquivo`;
+  }
+
+  return `${senderLabel} enviou uma mensagem`;
+}
+
 class PushService {
   constructor() {
     this.configure();
@@ -341,27 +371,13 @@ class PushService {
   }
 
   buildNotificationData(message, conversation) {
-    const textPreview = String(message.message || '')
-      .replace(/\s+/g, ' ')
-      .trim();
-    const attachmentPreview =
-      message.message_type === 'IMAGE'
-        ? 'Enviou uma imagem'
-        : message.message_type === 'AUDIO'
-          ? 'Enviou um audio'
-          : message.message_type === 'FILE'
-            ? 'Enviou um arquivo'
-            : 'Enviou uma mensagem';
-    const body =
-      textPreview.length > NOTIFICATION_PREVIEW_LIMIT
-        ? `${textPreview.slice(0, NOTIFICATION_PREVIEW_LIMIT - 1)}...`
-        : textPreview || attachmentPreview;
+    const body = limitNotificationText(message.message) || getAttachmentPreview(message, 'O suporte');
     const frontendUrl = getFrontendUrl();
     const url = `${frontendUrl}/chat`;
     const iconUrl = getNotificationIconUrl();
 
     return {
-      title: 'Nova resposta do suporte',
+      title: 'Suporte respondeu',
       body,
       url,
       conversation_id: conversation.id,
@@ -371,21 +387,6 @@ class PushService {
   }
 
   async buildAdminNotificationData(message, conversation) {
-    const textPreview = String(message.message || '')
-      .replace(/\s+/g, ' ')
-      .trim();
-    const attachmentPreview =
-      message.message_type === 'IMAGE'
-        ? 'Cliente enviou uma imagem'
-        : message.message_type === 'AUDIO'
-          ? 'Cliente enviou um audio'
-          : message.message_type === 'FILE'
-            ? 'Cliente enviou um arquivo'
-            : 'Cliente enviou uma mensagem';
-    const body =
-      textPreview.length > NOTIFICATION_PREVIEW_LIMIT
-        ? `${textPreview.slice(0, NOTIFICATION_PREVIEW_LIMIT - 1)}...`
-        : textPreview || attachmentPreview;
     const frontendUrl = getFrontendUrl();
     const url = `${frontendUrl}/dashboard?tab=chats`;
     const iconUrl = getNotificationIconUrl();
@@ -403,9 +404,10 @@ class PushService {
       cliente?.nome ||
       conversation.cliente_id_externo ||
       'Cliente';
+    const body = limitNotificationText(message.message) || getAttachmentPreview(message, clienteLabel);
 
     return {
-      title: `${clienteLabel} mandou mensagem`,
+      title: `Nova mensagem de ${clienteLabel}`,
       body,
       url,
       conversation_id: conversation.id,
@@ -415,19 +417,13 @@ class PushService {
   }
 
   buildBroadcastNotificationData(notice, conversation) {
-    const textPreview = String(notice.message || '')
-      .replace(/\s+/g, ' ')
-      .trim();
-    const body =
-      textPreview.length > NOTIFICATION_PREVIEW_LIMIT
-        ? `${textPreview.slice(0, NOTIFICATION_PREVIEW_LIMIT - 1)}...`
-        : textPreview || 'Voce recebeu um aviso do suporte.';
+    const body = limitNotificationText(notice.message) || 'Voce recebeu um aviso do suporte.';
     const frontendUrl = getFrontendUrl();
     const url = `${frontendUrl}/chat`;
     const iconUrl = getNotificationIconUrl();
 
     return {
-      title: notice.title || 'Aviso do suporte',
+      title: limitNotificationText(notice.title) || 'Aviso do suporte',
       body,
       url,
       conversation_id: conversation.id,
@@ -928,8 +924,8 @@ class PushService {
     }
 
     const data = {
-      title: 'Teste SuporteSync',
-      body: 'Notificacao do painel administrativo ativada neste dispositivo.',
+      title: 'SUPORTE ativo',
+      body: 'Notificacoes do painel estao ativadas neste celular.',
       url: `${getFrontendUrl()}/dashboard?tab=chats`,
       conversation_id: 'admin-test',
       icon: getNotificationIconUrl(),
