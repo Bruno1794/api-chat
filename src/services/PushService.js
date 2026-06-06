@@ -503,9 +503,10 @@ class PushService {
     }
 
     const sendUrl = (process.env.PUSHALERT_SEND_URL || PUSHALERT_DEFAULT_SEND_URL).trim();
+    const subscriptionsToNotify = subscriptions.slice(0, Number(process.env.PUSHALERT_MAX_RECIPIENTS || 3));
 
     await Promise.allSettled(
-      subscriptions.map(async record => {
+      subscriptionsToNotify.map(async record => {
         console.log('PushAlert enviando', {
           conversation_id: conversation.id,
           subscriber_id: record.subscriber_id
@@ -531,6 +532,14 @@ class PushService {
         const responseText = await response.text();
 
         if (!response.ok) {
+          if (response.status === 429) {
+            console.warn('PushAlert rate limit atingido', {
+              sendUrl,
+              subscriber_id: record.subscriber_id
+            });
+            return;
+          }
+
           console.error('PushAlert envio falhou', {
             sendUrl,
             status: response.status,
