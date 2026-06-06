@@ -284,6 +284,8 @@ class PushService {
       where: { token },
       defaults: {
         user_id: user.id,
+        cliente_id_externo: null,
+        conversation_id: null,
         token,
         platform: data.platform || null,
         device_name: data.device_name || data.deviceName || null,
@@ -295,6 +297,8 @@ class PushService {
     if (!record.isNewRecord) {
       await record.update({
         user_id: user.id,
+        cliente_id_externo: null,
+        conversation_id: null,
         platform: data.platform || record.platform,
         device_name: data.device_name || data.deviceName || record.device_name,
         user_agent: userAgent,
@@ -318,7 +322,7 @@ class PushService {
     const [record] = await ExpoPushToken.findOrCreate({
       where: { token },
       defaults: {
-        user_id: data.user_id || null,
+        user_id: null,
         cliente_id_externo: String(cliente.id),
         conversation_id: conversationId,
         token,
@@ -331,7 +335,7 @@ class PushService {
 
     if (!record.isNewRecord) {
       await record.update({
-        user_id: record.user_id || data.user_id || null,
+        user_id: null,
         cliente_id_externo: String(cliente.id),
         conversation_id: conversationId || record.conversation_id,
         platform: data.platform || record.platform,
@@ -443,6 +447,7 @@ class PushService {
 
     const subscriptions = await PushSubscription.findAll({
       where: {
+        user_id: null,
         cliente_id_externo: String(conversation.cliente_id_externo),
         [Op.or]: [{ conversation_id: conversation.id }, { conversation_id: null }]
       }
@@ -787,6 +792,7 @@ class PushService {
 
     const tokens = await ExpoPushToken.findAll({
       where: {
+        cliente_id_externo: null,
         user_id: {
           [Op.in]: targetUserIds
         }
