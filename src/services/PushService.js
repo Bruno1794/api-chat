@@ -311,6 +311,13 @@ class PushService {
       });
     }
 
+    console.log('Expo push cliente registrado', {
+      cliente_id_externo: String(cliente.id),
+      conversation_id: conversationId,
+      token: token.slice(0, 32),
+      platform: data.platform || null
+    });
+
     return {
       success: true
     };
@@ -592,6 +599,12 @@ class PushService {
       });
       return;
     }
+
+    console.log('Expo push cliente enviando', {
+      conversation_id: conversation.id,
+      cliente_id_externo: conversation.cliente_id_externo,
+      tokens: tokens.length
+    });
 
     const messages = tokens.map(record => ({
       to: record.token,
