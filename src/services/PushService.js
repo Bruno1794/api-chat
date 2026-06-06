@@ -565,16 +565,16 @@ class PushService {
 
     const data = this.buildNotificationData(message, conversation);
     const clientIsPresent = hasClientInConversation(conversation.id);
+    const tasks = [this.notifyClientExpoPush(data, conversation)];
 
-    if (clientIsPresent) {
-      return;
+    if (!clientIsPresent) {
+      tasks.push(
+        this.notifyWebPush(data, conversation),
+        this.notifyPushAlert(data, conversation)
+      );
     }
 
-    await Promise.allSettled([
-      this.notifyWebPush(data, conversation),
-      this.notifyPushAlert(data, conversation),
-      this.notifyClientExpoPush(data, conversation)
-    ]);
+    await Promise.allSettled(tasks);
   }
 
   async notifyClientExpoPush(data, conversation) {
