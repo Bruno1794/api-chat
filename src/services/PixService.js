@@ -3,6 +3,7 @@ const axios = require('axios');
 const ApiError = require('../utils/ApiError');
 const socket = require('../utils/socket');
 const ConversationService = require('./ConversationService');
+const ClienteService = require('./ClienteService');
 const PushService = require('./PushService');
 const { Conversation, Message, PixCharge } = require('../models');
 
@@ -66,6 +67,21 @@ function buildPixMessage(charge) {
   return `[[SUPORTESYNC_CARD:${JSON.stringify(payload)}]]`;
 }
 
+function onlyDigits(value) {
+  return String(value || '').replace(/\D/g, '');
+}
+
+function getClienteReference(cliente, fallback) {
+  return (
+    cliente?.referencia ||
+    cliente?.usuario_referencia ||
+    cliente?.reference ||
+    cliente?.nome ||
+    cliente?.name ||
+    fallback
+  );
+}
+
 class PixService {
   constructor() {
     this.client = axios.create({
@@ -108,11 +124,24 @@ class PixService {
 
     ConversationService.ensureCanAccess(conversation, user);
 
+    let cliente = null;
+
+    try {
+      cliente = await ClienteService.findById(conversation.cliente_id_externo);
+    } catch (error) {
+      cliente = null;
+    }
+
+    const clienteReference = getClienteReference(cliente, conversation.cliente_id_externo);
+    const payerPhone =
+      onlyDigits(data.payer_phone || data.phone) || onlyDigits(cliente?.telefone || cliente?.phone);
     const notificationUrl = getNotificationUrl();
     const payload = {
       amount,
-      user: data.user || undefined,
-      payer_phone: data.payer_phone || data.phone || undefined,
+      user: data.user || {
+        name: String(clienteReference)
+      },
+      payer_phone: payerPhone || undefined,
       notification_url: notificationUrl || undefined
     };
 
