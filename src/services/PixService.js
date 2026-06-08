@@ -169,7 +169,7 @@ class PixService {
 
     const message = await Message.create({
       conversation_id: conversation.id,
-      sender_type: 'SISTEMA',
+      sender_type: 'ATENDENTE',
       sender_id: String(user.id),
       message: buildPixMessage(charge),
       message_type: 'TEXT',
