@@ -14,6 +14,12 @@ class UploadController {
     return res.status(201).json(file);
   });
 
+  uploadBase64File = asyncHandler(async (req, res) => {
+    const file = UploadService.saveBase64File(req.body);
+
+    return res.status(201).json(file);
+  });
+
   uploadBase64Chunk = asyncHandler(async (req, res) => {
     const result = UploadService.saveBase64Chunk(req.body);
 

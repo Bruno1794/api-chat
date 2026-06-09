@@ -21,6 +21,22 @@ const allowedBase64MimeTypes = new Map([
   ['image/heif', '.heif']
 ]);
 
+const fallbackMimeTypesByExtension = {
+  apk: 'application/vnd.android.package-archive',
+  pdf: 'application/pdf',
+  zip: 'application/zip',
+  rar: 'application/vnd.rar',
+  doc: 'application/msword',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xls: 'application/vnd.ms-excel',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  txt: 'text/plain',
+  mp3: 'audio/mpeg',
+  m4a: 'audio/mp4',
+  mp4: 'audio/mp4',
+  webm: 'audio/webm'
+};
+
 const chunkDir = path.join(uploadDir, '.chunks');
 
 if (!fs.existsSync(chunkDir)) {
@@ -82,6 +98,38 @@ class UploadService {
       path: filePath,
       url: `/files/${savedFilename}`,
       mime_type: parsed.mimeType === 'image/jpg' ? 'image/jpeg' : parsed.mimeType,
+      size: buffer.length
+    };
+  }
+
+  saveBase64File({ filename, mime_type, data }) {
+    if (!data) {
+      throw new ApiError('Arquivo nao enviado', 422);
+    }
+
+    const parsed = this.parseBase64Payload(data, mime_type);
+    const safeOriginalName = this.normalizeOriginalName(filename, this.getSafeExtension(filename));
+    const extension = this.getSafeExtension(safeOriginalName) || '.bin';
+    const buffer = Buffer.from(parsed.base64, 'base64');
+
+    if (!buffer.length) {
+      throw new ApiError('Arquivo invalido', 422);
+    }
+
+    this.assertBase64Size(buffer);
+
+    const savedFilename = `${uuid()}${extension}`;
+    const filePath = path.join(uploadDir, savedFilename);
+    const normalizedMimeType = parsed.mimeType || this.getMimeTypeFromExtension(extension) || 'application/octet-stream';
+
+    fs.writeFileSync(filePath, buffer);
+
+    return {
+      filename: savedFilename,
+      original_name: safeOriginalName,
+      path: filePath,
+      url: `/files/${savedFilename}`,
+      mime_type: normalizedMimeType,
       size: buffer.length
     };
   }
@@ -177,6 +225,30 @@ class UploadService {
       mimeType: String(mimeType || '').toLowerCase(),
       base64: String(data)
     };
+  }
+
+  getSafeExtension(filename) {
+    const extension = path.extname(String(filename || '')).toLowerCase();
+
+    if (!extension || extension.includes('/') || extension.includes('\\') || extension.includes('..')) {
+      return '';
+    }
+
+    return extension.replace(/[^.a-z0-9]/g, '').slice(0, 16);
+  }
+
+  getMimeTypeFromExtension(extension) {
+    const key = String(extension || '').replace(/^\./, '').toLowerCase();
+
+    return fallbackMimeTypesByExtension[key];
+  }
+
+  assertBase64Size(buffer) {
+    const maxSizeMb = Number(process.env.UPLOAD_MAX_SIZE_MB || 20);
+
+    if (maxSizeMb > 0 && buffer.length > maxSizeMb * 1024 * 1024) {
+      throw new ApiError(`Arquivo excede o limite de ${maxSizeMb}MB`, 413);
+    }
   }
 
   normalizeOriginalName(filename, extension) {
