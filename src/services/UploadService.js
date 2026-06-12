@@ -46,6 +46,13 @@ if (!fs.existsSync(chunkDir)) {
 }
 
 class UploadService {
+  buildFileUrl(filename) {
+    const pathUrl = `/files/${filename}`;
+    const appUrl = String(process.env.APP_URL || '').replace(/\/$/, '');
+
+    return appUrl ? `${appUrl}${pathUrl}` : pathUrl;
+  }
+
   buildFileResponse(file) {
     if (!file) {
       throw new ApiError('Arquivo nao enviado', 422);
@@ -55,7 +62,7 @@ class UploadService {
       filename: file.filename,
       original_name: file.originalname,
       path: file.path,
-      url: `/files/${file.filename}`,
+      url: this.buildFileUrl(file.filename),
       mime_type: file.mimetype,
       size: file.size
     };
@@ -96,7 +103,7 @@ class UploadService {
       filename: savedFilename,
       original_name: this.normalizeOriginalName(filename, extension),
       path: filePath,
-      url: `/files/${savedFilename}`,
+      url: this.buildFileUrl(savedFilename),
       mime_type: parsed.mimeType === 'image/jpg' ? 'image/jpeg' : parsed.mimeType,
       size: buffer.length
     };
@@ -128,7 +135,7 @@ class UploadService {
       filename: savedFilename,
       original_name: safeOriginalName,
       path: filePath,
-      url: `/files/${savedFilename}`,
+      url: this.buildFileUrl(savedFilename),
       mime_type: normalizedMimeType,
       size: buffer.length
     };
@@ -204,7 +211,7 @@ class UploadService {
         filename: savedFilename,
         original_name: this.normalizeOriginalName(filename, extension),
         path: filePath,
-        url: `/files/${savedFilename}`,
+        url: this.buildFileUrl(savedFilename),
         mime_type: mime_type === 'image/jpg' ? 'image/jpeg' : mime_type,
         size: buffer.length
       }
