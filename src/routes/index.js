@@ -15,6 +15,7 @@ const authMiddleware = require('../middlewares/authMiddleware');
 const broadcastRoutes = require('./broadcasts.routes');
 const maintenanceRoutes = require('./maintenance.routes');
 const pixRoutes = require('./pix.routes');
+const chatPopupRoutes = require('./chat-popup.routes');
 
 const router = Router();
 
@@ -31,6 +32,7 @@ router.post('/push-tokens', authMiddleware, PushController.subscribeAdminExpo);
 router.use('/broadcasts', broadcastRoutes);
 router.use('/maintenance', maintenanceRoutes);
 router.use('/pix', pixRoutes);
+router.use('/chat-popup', chatPopupRoutes);
 router.use(uploadRoutes);
 
 module.exports = router;
