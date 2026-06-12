@@ -2,6 +2,7 @@ const ApiError = require('../utils/ApiError');
 const { Setting } = require('../models');
 
 const SETTING_KEY = 'chat_popup_config';
+const LIST_SETTING_KEY = 'chat_popup_configs';
 
 function readBoolean(value, fallback) {
   if (value === undefined) {
@@ -88,33 +89,183 @@ class ChatPopupService {
     };
   }
 
-  async getConfig() {
+  sortConfigs(configs) {
+    return [...configs].sort((left, right) => {
+      if (left.enabled !== right.enabled) {
+        return left.enabled ? -1 : 1;
+      }
+
+      return String(right.updatedAt || '').localeCompare(String(left.updatedAt || ''));
+    });
+  }
+
+  withTimestamps(config, existing = {}) {
+    const now = new Date().toISOString();
+
+    return {
+      ...config,
+      createdAt: existing.createdAt || now,
+      updatedAt: now
+    };
+  }
+
+  async readLegacyConfig() {
     const setting = await Setting.findOne({ where: { key: SETTING_KEY } });
 
     if (!setting) {
-      return this.defaultConfig();
+      return null;
     }
 
-    return this.sanitize(setting.value);
+    return this.withTimestamps(this.sanitize(setting.value));
   }
 
-  async updateConfig(data, user) {
-    if (user.role !== 'ADMIN') {
-      throw new ApiError('Voce nao tem permissao para configurar o popup', 403);
+  async readList() {
+    const setting = await Setting.findOne({ where: { key: LIST_SETTING_KEY } });
+
+    if (!setting || !Array.isArray(setting.value)) {
+      const legacyConfig = await this.readLegacyConfig();
+
+      return legacyConfig ? [legacyConfig] : [];
     }
 
-    const config = this.sanitize(data);
+    return this.sortConfigs(
+      setting.value
+        .filter(item => item && typeof item === 'object')
+        .map(item => ({
+          ...this.sanitize(item),
+          createdAt: item.createdAt || item.created_at || new Date().toISOString(),
+          updatedAt: item.updatedAt || item.updated_at || new Date().toISOString()
+        }))
+    );
+  }
 
+  async saveList(configs) {
+    await Setting.upsert({
+      key: LIST_SETTING_KEY,
+      value: this.sortConfigs(configs)
+    });
+  }
+
+  ensureCanManage(user) {
+    if (user.role === 'ADMIN') {
+      return;
+    }
+
+    throw new ApiError('Voce nao tem permissao para configurar o popup', 403);
+  }
+
+  validateActiveConfig(config) {
     if (config.enabled && !config.title && !config.message && !config.imageUrl) {
       throw new ApiError('Configure titulo, mensagem ou imagem antes de ativar.', 422);
     }
+  }
 
-    await Setting.upsert({
-      key: SETTING_KEY,
-      value: config
-    });
+  async getConfig() {
+    const configs = await this.readList();
+    const activeConfig = configs.find(config => config.enabled);
+
+    return activeConfig || this.defaultConfig();
+  }
+
+  async listConfigs(user) {
+    this.ensureCanManage(user);
+
+    return this.readList();
+  }
+
+  async createConfig(data, user) {
+    this.ensureCanManage(user);
+
+    const config = this.withTimestamps(
+      this.sanitize({
+        ...data,
+        id: data.id || `popup-${Date.now()}`
+      })
+    );
+    this.validateActiveConfig(config);
+
+    const configs = await this.readList();
+    const exists = configs.some(item => item.id === config.id);
+
+    if (exists) {
+      throw new ApiError('Ja existe um popup com esta versao.', 409);
+    }
+
+    const nextConfigs = config.enabled
+      ? configs.map(item => ({ ...item, enabled: false }))
+      : configs;
+
+    await this.saveList([config, ...nextConfigs]);
 
     return config;
+  }
+
+  async updateById(id, data, user) {
+    this.ensureCanManage(user);
+
+    const configs = await this.readList();
+    const currentConfig = configs.find(item => item.id === id);
+
+    if (!currentConfig) {
+      throw new ApiError('Popup nao encontrado.', 404);
+    }
+
+    const config = this.withTimestamps(
+      this.sanitize({
+        ...currentConfig,
+        ...data,
+        id: data.id || currentConfig.id
+      }),
+      currentConfig
+    );
+    this.validateActiveConfig(config);
+
+    if (config.id !== id && configs.some(item => item.id === config.id)) {
+      throw new ApiError('Ja existe um popup com esta versao.', 409);
+    }
+
+    const nextConfigs = configs.map(item => {
+      if (item.id === id) {
+        return config;
+      }
+
+      return config.enabled ? { ...item, enabled: false } : item;
+    });
+
+    await this.saveList(nextConfigs);
+
+    return config;
+  }
+
+  async deleteById(id, user) {
+    this.ensureCanManage(user);
+
+    const configs = await this.readList();
+    const nextConfigs = configs.filter(item => item.id !== id);
+
+    if (nextConfigs.length === configs.length) {
+      throw new ApiError('Popup nao encontrado.', 404);
+    }
+
+    await this.saveList(nextConfigs);
+
+    return { success: true };
+  }
+
+  async updateConfig(data, user) {
+    this.ensureCanManage(user);
+
+    const config = this.sanitize(data);
+    this.validateActiveConfig(config);
+
+    const configs = await this.readList();
+    const currentConfig = configs.find(item => item.id === config.id);
+
+    if (currentConfig) {
+      return this.updateById(config.id, config, user);
+    }
+
+    return this.createConfig(config, user);
   }
 }
 
