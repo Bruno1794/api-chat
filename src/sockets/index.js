@@ -21,6 +21,74 @@ async function resolveUser(socket) {
   return User.findByPk(decoded.id);
 }
 
+async function markUserOnline(socket) {
+  if (!socket.user) {
+    return;
+  }
+
+  const lastSeen = new Date();
+
+  await User.update(
+    {
+      online: true,
+      ultimo_acesso: lastSeen
+    },
+    {
+      where: {
+        id: socket.user.id
+      }
+    }
+  );
+
+  socket.user.online = true;
+  socket.user.ultimo_acesso = lastSeen;
+  socket.broadcast.emit('user_online', {
+    user_id: socket.user.id,
+    online: true,
+    ultimo_acesso: lastSeen.toISOString()
+  });
+}
+
+function markUserOfflineWhenNoSockets(io, socket) {
+  if (!socket.user) {
+    return;
+  }
+
+  const userId = socket.user.id;
+
+  setTimeout(async () => {
+    const userRoom = io.sockets.adapter.rooms.get(`user:${userId}`);
+
+    if (userRoom && userRoom.size > 0) {
+      return;
+    }
+
+    const lastSeen = new Date();
+
+    try {
+      await User.update(
+        {
+          online: false,
+          ultimo_acesso: lastSeen
+        },
+        {
+          where: {
+            id: userId
+          }
+        }
+      );
+
+      socket.broadcast.emit('user_offline', {
+        user_id: userId,
+        online: false,
+        ultimo_acesso: lastSeen.toISOString()
+      });
+    } catch (error) {
+      console.error('Erro ao atualizar ultimo acesso do usuario:', error);
+    }
+  }, 1000);
+}
+
 function initSockets(io) {
   io.use(async (socket, next) => {
     try {
@@ -41,8 +109,8 @@ function initSockets(io) {
 
     if (socket.user) {
       socket.join(`user:${socket.user.id}`);
-      socket.broadcast.emit('user_online', {
-        user_id: socket.user.id
+      markUserOnline(socket).catch(error => {
+        console.error('Erro ao atualizar presenca do usuario:', error);
       });
     }
 
@@ -89,9 +157,7 @@ function initSockets(io) {
       leaveAllPresence(io, socket);
 
       if (socket.user) {
-        socket.broadcast.emit('user_offline', {
-          user_id: socket.user.id
-        });
+        markUserOfflineWhenNoSockets(io, socket);
       }
 
       console.log(`Socket desconectado: ${socket.id}. Motivo: ${reason}`);
